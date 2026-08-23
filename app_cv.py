@@ -247,7 +247,7 @@ with tab2:
         st.success("✅ Surat Tugas berhasil disusun!")
         
         st.download_button(
-            label="⬇️ Unduh Surat Tugas (.docx)",
+            label="️ Unduh Surat Tugas (.docx)",
             data=st_bytes,
             file_name=f"ST_DL_{st_nama.replace(' ', '_').replace('.', '')}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
