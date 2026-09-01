@@ -73,7 +73,9 @@ MARGIN_KANAN = 2.0 * cm
 LEBAR_KERJA = 16.0 * cm
 
 JENIS_TENAGA_AHLI = "Tenaga Ahli"
+JENIS_PEMBANTU_PENELITI = "Pembantu Peneliti"
 JENIS_PENYELAM = "Tenaga Spesialis Penyelaman"
+JENIS_PEMBANTU_LAPANGAN = "Pembantu Lapangan"
 
 
 # =====================================================================
@@ -142,6 +144,11 @@ class CVData:
     keahlian_selam: List[str] = field(default_factory=list)
     pengalaman_selam: List[Dict[str, Any]] = field(default_factory=list)
 
+    # --- Khusus Pembantu Lapangan ---
+    pekerjaan_sehari_hari: str = ""
+    keterampilan_lapangan: List[str] = field(default_factory=list)
+    pengalaman_lapangan: List[Dict[str, Any]] = field(default_factory=list)
+
     # --- Pernyataan dan tanda tangan ---
     tempat_ttd: str = "Bitung"
     tanggal_ttd: Optional[date] = None
@@ -164,6 +171,10 @@ class CVData:
     def adalah_penyelam(self) -> bool:
         """Mengembalikan True bila dokumen berjenis Spesialis Penyelaman."""
         return self.jenis_cv == JENIS_PENYELAM
+
+    def adalah_lapangan(self) -> bool:
+        """Mengembalikan True bila dokumen berjenis Pembantu Lapangan."""
+        return self.jenis_cv == JENIS_PEMBANTU_LAPANGAN
 
 
 PERNYATAAN_BAKU = (
@@ -581,6 +592,69 @@ def _isi_pdf_penyelam(g: Dict[str, ParagraphStyle], data: CVData) -> List:
     return e
 
 
+def _isi_pdf_lapangan(g: Dict[str, ParagraphStyle], data: CVData) -> List:
+    """Menyusun bagian isi CV untuk jenis Pembantu Lapangan."""
+    e = []
+
+    # A. Data pribadi
+    e.append(_judul_seksi_pdf(g, "A. Data Pribadi"))
+    e.append(_tabel_label_pdf(g, _baris_data_pribadi(data)))
+
+    # B. Keterampilan khusus lapangan
+    e.append(_judul_seksi_pdf(g, "B. Keterampilan Khusus Lapangan"))
+    if data.keterampilan_lapangan:
+        for k in data.keterampilan_lapangan:
+            e.append(Paragraph(f"&#9642; {k}", g["isi"]))
+    else:
+        e.append(Paragraph("Belum diisi.", g["isi"]))
+
+    # C. Pengalaman kerja lapangan
+    e.append(_judul_seksi_pdf(g, "C. Pengalaman Kerja Lapangan"))
+    baris = []
+    for i, b in enumerate(data.pengalaman_lapangan, start=1):
+        baris.append([
+            str(i), b.get("Kegiatan", ""), b.get("Tahun", ""),
+            b.get("Lokasi", ""), b.get("Pemberi Kerja", ""),
+        ])
+    if baris:
+        e.append(_tabel_data_pdf(
+            g, ["No", "Kegiatan", "Tahun", "Lokasi", "Pemberi Kerja"], baris,
+            [1.0 * cm, 5.0 * cm, 2.0 * cm, 3.6 * cm, 4.4 * cm],
+        ))
+    else:
+        e.append(Paragraph("Belum diisi.", g["isi"]))
+
+    # D. Riwayat pendidikan (opsional)
+    if data.pendidikan:
+        e.append(_judul_seksi_pdf(g, "D. Riwayat Pendidikan"))
+        baris = [
+            [b.get("Jenjang", ""), b.get("Jurusan", ""),
+             b.get("Universitas", ""), b.get("Kota", ""),
+             b.get("Tahun Lulus", "")]
+            for b in data.pendidikan
+        ]
+        e.append(_tabel_data_pdf(
+            g, ["Jenjang", "Jurusan", "Universitas", "Kota", "Tahun"], baris,
+            [2.0 * cm, 4.0 * cm, 5.0 * cm, 2.8 * cm, 2.2 * cm],
+        ))
+
+    # E. Sertifikasi (opsional)
+    if data.sertifikasi:
+        e.append(_judul_seksi_pdf(g, "E. Sertifikasi Kompetensi"))
+        baris = [
+            [b.get("Nama Sertifikat", ""), b.get("Nomor", ""),
+             b.get("Lembaga Penerbit", ""), b.get("Tahun", ""),
+             b.get("Masa Berlaku", "")]
+            for b in data.sertifikasi
+        ]
+        e.append(_tabel_data_pdf(
+            g, ["Nama Sertifikat", "Nomor", "Lembaga", "Tahun", "Berlaku"],
+            baris, [4.4 * cm, 3.0 * cm, 4.0 * cm, 2.0 * cm, 2.6 * cm],
+        ))
+
+    return e
+
+
 def _baris_data_pribadi(data: CVData) -> List[tuple]:
     """Menyusun daftar pasangan label–nilai untuk tabel data pribadi."""
     baris = [
@@ -594,6 +668,8 @@ def _baris_data_pribadi(data: CVData) -> List[tuple]:
         ("Surel (Email)", data.email),
         ("Nomor KTP (NIK)", data.nomor_ktp),
     ]
+    if data.pekerjaan_sehari_hari.strip():
+        baris.append(("Pekerjaan Sehari-hari", data.pekerjaan_sehari_hari))
     if data.npwp.strip():
         baris.append(("NPWP", data.npwp))
     if data.nip.strip():
@@ -643,6 +719,8 @@ def _pdf_utama(data: CVData) -> bytes:
 
     if data.adalah_penyelam():
         elemen += _isi_pdf_penyelam(g, data)
+    elif data.adalah_lapangan():
+        elemen += _isi_pdf_lapangan(g, data)
     else:
         elemen += _isi_pdf_tenaga_ahli(g, data)
 
@@ -1104,6 +1182,8 @@ def generate_cv_docx(data: CVData) -> bytes:
 
     if data.adalah_penyelam():
         _isi_docx_penyelam(dok, data)
+    elif data.adalah_lapangan():
+        _isi_docx_lapangan(dok, data)
     else:
         _isi_docx_tenaga_ahli(dok, data)
 
@@ -1267,6 +1347,63 @@ def _isi_docx_penyelam(dok: Document, data: CVData):
 
     if data.sertifikasi:
         _judul_seksi_docx(dok, "G. Sertifikasi Kompetensi Lainnya")
+        baris = [
+            [b.get("Nama Sertifikat", ""), b.get("Nomor", ""),
+             b.get("Lembaga Penerbit", ""), b.get("Tahun", ""),
+             b.get("Masa Berlaku", "")]
+            for b in data.sertifikasi
+        ]
+        _tabel_data_docx(
+            dok, ["Nama Sertifikat", "Nomor", "Lembaga", "Tahun", "Berlaku"],
+            baris, [4.4, 3.0, 4.0, 2.0, 2.6],
+        )
+
+
+def _isi_docx_lapangan(dok: Document, data: CVData):
+    """Menyusun bagian isi DOCX untuk jenis Pembantu Lapangan."""
+    _judul_seksi_docx(dok, "A. Data Pribadi")
+    _tabel_label_docx(dok, _baris_data_pribadi(data))
+
+    _judul_seksi_docx(dok, "B. Keterampilan Khusus Lapangan")
+    if data.keterampilan_lapangan:
+        for k in data.keterampilan_lapangan:
+            pk = dok.add_paragraph()
+            pk.paragraph_format.left_indent = Cm(0.8)
+            pk.paragraph_format.space_after = Pt(2)
+            _tulis(pk, f"\u25aa  {k}")
+    else:
+        _tulis(dok.add_paragraph(), "Belum diisi.")
+
+    _judul_seksi_docx(dok, "C. Pengalaman Kerja Lapangan")
+    baris = []
+    for i, b in enumerate(data.pengalaman_lapangan, start=1):
+        baris.append([
+            str(i), b.get("Kegiatan", ""), b.get("Tahun", ""),
+            b.get("Lokasi", ""), b.get("Pemberi Kerja", ""),
+        ])
+    if baris:
+        _tabel_data_docx(
+            dok, ["No", "Kegiatan", "Tahun", "Lokasi", "Pemberi Kerja"],
+            baris, [1.0, 5.0, 2.0, 3.6, 4.4],
+        )
+    else:
+        _tulis(dok.add_paragraph(), "Belum diisi.")
+
+    if data.pendidikan:
+        _judul_seksi_docx(dok, "D. Riwayat Pendidikan")
+        baris = [
+            [b.get("Jenjang", ""), b.get("Jurusan", ""),
+             b.get("Universitas", ""), b.get("Kota", ""),
+             b.get("Tahun Lulus", "")]
+            for b in data.pendidikan
+        ]
+        _tabel_data_docx(
+            dok, ["Jenjang", "Jurusan", "Universitas", "Kota", "Tahun"],
+            baris, [2.0, 4.0, 5.0, 2.8, 2.2],
+        )
+
+    if data.sertifikasi:
+        _judul_seksi_docx(dok, "E. Sertifikasi Kompetensi")
         baris = [
             [b.get("Nama Sertifikat", ""), b.get("Nomor", ""),
              b.get("Lembaga Penerbit", ""), b.get("Tahun", ""),

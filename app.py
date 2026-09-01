@@ -21,7 +21,8 @@ from utils import (
 )
 from cv_builder import (
     CVData, Lampiran, generate_cv_pdf, generate_cv_docx,
-    JENIS_TENAGA_AHLI, JENIS_PENYELAM,
+    JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI, JENIS_PENYELAM,
+    JENIS_PEMBANTU_LAPANGAN,
 )
 from st_dinas_luar_builder import (
     DataSuratTugas, generate_st_dinas_luar, generate_st_dinas_luar_pdf,
@@ -199,6 +200,10 @@ TABEL_KOSONG = {
          "Kedalaman Maks (m)": "", "Lama Kegiatan": "", "Pemberi Kerja": ""}
         for _ in range(5)
     ]),
+    "pengalaman_lapangan": pd.DataFrame([
+        {"Kegiatan": "", "Tahun": "", "Lokasi": "", "Pemberi Kerja": ""}
+        for _ in range(5)
+    ]),
     "personil_st": pd.DataFrame([
         {"Nama": "", "NIP": "", "Jabatan": "", "Peran dalam Tim": ""}
     ]),
@@ -215,9 +220,16 @@ KEAHLIAN_SELAM_PILIHAN = [
     "Penandaan dan Pemetaan Terumbu Karang", "Pengambilan Sampel Biologi",
 ]
 
+KETERAMPILAN_LAPANGAN_PILIHAN = [
+    "Mengemudikan Perahu/Kapal Motor", "Mengenal Kondisi Perairan dan Arus Setempat",
+    "Angkat-Angkut dan Logistik Lapangan", "Menyelam Tradisional/Skin Diving",
+    "Pemandu Lokal / Penunjuk Lokasi",
+    "Perawatan dan Perbaikan Peralatan Lapangan",
+]
+
 PERAN_TIM_PILIHAN = [
     "Ketua Tim Pelaksana", "Anggota Tim Pelaksana", "Pembantu Peneliti",
-    "Penyelam Bersertifikat",
+    "Penyelam Bersertifikat", "Pembantu Lapangan",
 ]
 
 
@@ -310,11 +322,13 @@ def pratinjau_berkas(berkas, label: str, wajib: bool = True):
         st.image(berkas.getvalue(), width=140, caption=berkas.name)
 
 
-def bagian_unggah_dokumen(kunci_awalan: str = "cv"):
-    """Menampilkan empat widget unggahan dokumen wajib beserta validasinya.
+def bagian_unggah_dokumen(kunci_awalan: str = "cv", wajib_lisensi: bool = True):
+    """Menampilkan empat widget unggahan dokumen beserta validasinya.
 
     Berkas yang lolos validasi ukuran disimpan ke session_state agar tetap
-    tersedia meskipun antarmuka dijalankan ulang.
+    tersedia meskipun antarmuka dijalankan ulang. Parameter `wajib_lisensi`
+    diset False untuk jenis CV yang personilnya tidak menyelam (Pembantu
+    Lapangan), sehingga License Menyelam SCUBA menjadi opsional.
     """
     st.markdown("### 📎 Upload Dokumen")
     st.caption(
@@ -361,8 +375,10 @@ def bagian_unggah_dokumen(kunci_awalan: str = "cv"):
 
     # --- 3. Lisensi menyelam SCUBA ---
     with kol3:
+        label_wajib = "" if wajib_lisensi else " (opsional)"
         st.markdown(
-            f"**3. {LABEL_DOKUMEN['lisensi']}** · maks {BATAS_MB['lisensi']} MB"
+            f"**3. {LABEL_DOKUMEN['lisensi']}**{label_wajib} · maks "
+            f"{BATAS_MB['lisensi']} MB"
         )
         st.caption("Berlaku untuk PADI, SSI, CMAS, TNI-AL, atau lisensi lain.")
         lisensi = st.file_uploader(
@@ -377,7 +393,8 @@ def bagian_unggah_dokumen(kunci_awalan: str = "cv"):
         else:
             st.session_state.berkas_lisensi = lisensi
         pratinjau_berkas(
-            st.session_state.berkas_lisensi, LABEL_DOKUMEN["lisensi"]
+            st.session_state.berkas_lisensi, LABEL_DOKUMEN["lisensi"],
+            wajib=wajib_lisensi,
         )
 
     # --- 4. Sertifikat lainnya (opsional, banyak berkas) ---
@@ -480,16 +497,21 @@ def halaman_cv():
 
     jenis_cv = st.radio(
         "Jenis CV yang akan dibuat",
-        [JENIS_TENAGA_AHLI, JENIS_PENYELAM],
+        [JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI, JENIS_PENYELAM,
+         JENIS_PEMBANTU_LAPANGAN],
         horizontal=True,
         key="cv_jenis",
         help=(
-            "Tenaga Ahli menekankan pendidikan, publikasi, dan pengalaman "
-            "kerja. Tenaga Spesialis Penyelaman menekankan lisensi selam, "
-            "jam selam, dan pengalaman penyelaman."
+            "Tenaga Ahli & Pembantu Peneliti menekankan pendidikan, "
+            "publikasi, dan pengalaman kerja (field sama, beda skema "
+            "honor). Tenaga Spesialis Penyelaman menekankan lisensi selam "
+            "dan jam selam. Pembantu Lapangan memakai form sederhana untuk "
+            "tenaga pendukung harian (nelayan/masyarakat lokal)."
         ),
     )
     penyelam = jenis_cv == JENIS_PENYELAM
+    lapangan = jenis_cv == JENIS_PEMBANTU_LAPANGAN
+    ahli_atau_peneliti = jenis_cv in (JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI)
 
     # Tempat menampilkan blok galat validasi di bagian atas form
     wadah_galat = st.container()
@@ -556,7 +578,7 @@ def halaman_cv():
     # ---------------------------------------------------------------
     # 2. UPLOAD DOKUMEN
     # ---------------------------------------------------------------
-    bagian_unggah_dokumen("cv")
+    bagian_unggah_dokumen("cv", wajib_lisensi=not lapangan)
 
     # ---------------------------------------------------------------
     # 3. PENDIDIKAN
@@ -662,6 +684,50 @@ def halaman_cv():
 
         bidang_keahlian = []
         publikasi_bersih = []
+        pekerjaan_sehari_hari = ""
+        keterampilan_lapangan = []
+
+    elif lapangan:
+        st.markdown("### 🛶 Pekerjaan dan Keterampilan Lapangan")
+        pekerjaan_sehari_hari = st.text_input(
+            "Pekerjaan Sehari-hari *", key="cv_pekerjaan_sehari_hari",
+            placeholder="Contoh: Nelayan, Buruh Harian, Petani",
+        )
+        st.markdown("**Keterampilan Khusus Lapangan** (pilih yang sesuai)")
+        kolkl = st.columns(2)
+        keterampilan_lapangan = []
+        for i, ket in enumerate(KETERAMPILAN_LAPANGAN_PILIHAN):
+            with kolkl[i % 2]:
+                if st.checkbox(ket, key=f"cv_ket_lapangan_{i}"):
+                    keterampilan_lapangan.append(ket)
+        keterampilan_manual = st.text_input(
+            "Keterampilan lainnya (pisahkan dengan koma)",
+            key="cv_ket_lapangan_manual",
+        )
+        if keterampilan_manual.strip():
+            keterampilan_lapangan += [
+                k.strip() for k in keterampilan_manual.split(",") if k.strip()
+            ]
+
+        st.markdown("### 🧰 Pengalaman Kerja Lapangan")
+        st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
+        st.session_state.pengalaman_lapangan = st.data_editor(
+            st.session_state.pengalaman_lapangan,
+            num_rows="dynamic", width="stretch",
+            key="ed_pengalaman_lapangan",
+            column_config={
+                "Tahun": st.column_config.TextColumn("Tahun", width="small"),
+            },
+        )
+
+        bidang_keahlian = []
+        publikasi_bersih = []
+        lisensi_jenis = lisensi_nomor = lisensi_level = ""
+        lisensi_terbit = lisensi_berlaku = None
+        medis_nomor = medis_penerbit = ""
+        medis_terbit = medis_berlaku = None
+        total_jam_selam = 0
+        keahlian_selam = []
 
     else:
         st.markdown("### 🔬 Bidang Keahlian")
@@ -685,14 +751,16 @@ def halaman_cv():
         medis_terbit = medis_berlaku = None
         total_jam_selam = 0
         keahlian_selam = []
+        pekerjaan_sehari_hari = ""
+        keterampilan_lapangan = []
 
     # ---------------------------------------------------------------
     # 5. SERTIFIKASI KOMPETENSI
     # ---------------------------------------------------------------
-    judul_sertifikasi = (
-        "📜 Sertifikasi Kompetensi Lainnya" if penyelam
-        else "📜 Sertifikasi Kompetensi"
-    )
+    if ahli_atau_peneliti:
+        judul_sertifikasi = "📜 Sertifikasi Kompetensi"
+    else:
+        judul_sertifikasi = "📜 Sertifikasi Kompetensi Lainnya (opsional)"
     st.markdown(f"### {judul_sertifikasi}")
     st.session_state.sertifikasi = st.data_editor(
         st.session_state.sertifikasi,
@@ -703,9 +771,10 @@ def halaman_cv():
     )
 
     # ---------------------------------------------------------------
-    # 6. PENGALAMAN KERJA DAN PUBLIKASI (khusus Tenaga Ahli)
+    # 6. PENGALAMAN KERJA DAN PUBLIKASI (khusus Tenaga Ahli/Pembantu Peneliti)
     # ---------------------------------------------------------------
-    if not penyelam:
+    publikasi_bersih = []
+    if ahli_atau_peneliti:
         st.markdown("### 💼 Pengalaman Kerja")
         st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
         st.session_state.pengalaman_kerja = st.data_editor(
@@ -740,23 +809,27 @@ def halaman_cv():
 
     pendidikan_pratinjau = bersihkan_tabel(st.session_state.pendidikan)
     sertifikasi_pratinjau = bersihkan_tabel(st.session_state.sertifikasi)
-    pengalaman_pratinjau = bersihkan_tabel(
-        st.session_state.pengalaman_selam if penyelam
-        else st.session_state.pengalaman_kerja
-    )
+    if penyelam:
+        pengalaman_pratinjau = bersihkan_tabel(st.session_state.pengalaman_selam)
+    elif lapangan:
+        pengalaman_pratinjau = bersihkan_tabel(st.session_state.pengalaman_lapangan)
+    else:
+        pengalaman_pratinjau = bersihkan_tabel(st.session_state.pengalaman_kerja)
     publikasi_pratinjau = (
-        [] if penyelam else bersihkan_tabel(st.session_state.publikasi)
+        bersihkan_tabel(st.session_state.publikasi) if ahli_atau_peneliti else []
     )
     medis_masih_berlaku = bool(
         penyelam and medis_berlaku and medis_berlaku >= date.today()
     )
+    keahlian_untuk_draf = keterampilan_lapangan if lapangan else bidang_keahlian
 
     if st.button("🔄 Buat / Perbarui Draf Otomatis", key="cv_tombol_draf_afiliasi"):
         st.session_state.cv_ringkasan_afiliasi = utils.buat_draf_afiliasi(
             nama=nama, jenis_cv=jenis_cv,
             peran_tim=peran_tim, peran_teknis=peran_teknis,
+            pekerjaan_sehari_hari=pekerjaan_sehari_hari if lapangan else "",
             pendidikan=pendidikan_pratinjau,
-            bidang_keahlian=bidang_keahlian,
+            bidang_keahlian=keahlian_untuk_draf,
             sertifikasi=sertifikasi_pratinjau,
             pengalaman=pengalaman_pratinjau, publikasi=publikasi_pratinjau,
             keahlian_selam=keahlian_selam,
@@ -814,9 +887,12 @@ def halaman_cv():
         kerja_bersih = bersihkan_tabel(st.session_state.pengalaman_kerja)
         selam_bersih = bersihkan_tabel(st.session_state.pengalaman_selam)
         publikasi_bersih = bersihkan_tabel(st.session_state.publikasi)
+        lapangan_bersih = bersihkan_tabel(st.session_state.pengalaman_lapangan)
 
         galat = validasi_form_cv(
-            penyelam=penyelam, nama=nama, tempat_lahir=tempat_lahir,
+            penyelam=penyelam, lapangan=lapangan,
+            ahli_atau_peneliti=ahli_atau_peneliti,
+            nama=nama, tempat_lahir=tempat_lahir,
             jenis_kelamin=jenis_kelamin, agama=agama,
             kewarganegaraan=kewarganegaraan, alamat=alamat, telepon=telepon,
             email=email, nomor_ktp=nomor_ktp,
@@ -825,6 +901,9 @@ def halaman_cv():
             lisensi_jenis=lisensi_jenis, lisensi_nomor=lisensi_nomor,
             lisensi_level=lisensi_level, medis_nomor=medis_nomor,
             medis_penerbit=medis_penerbit, keahlian_selam=keahlian_selam,
+            pekerjaan_sehari_hari=pekerjaan_sehari_hari,
+            keterampilan_lapangan=keterampilan_lapangan,
+            pengalaman_lapangan=lapangan_bersih,
         )
 
         if galat:
@@ -858,6 +937,9 @@ def halaman_cv():
                 total_jam_selam=int(total_jam_selam),
                 keahlian_selam=keahlian_selam,
                 pengalaman_selam=selam_bersih,
+                pekerjaan_sehari_hari=pekerjaan_sehari_hari,
+                keterampilan_lapangan=keterampilan_lapangan,
+                pengalaman_lapangan=lapangan_bersih,
                 tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
                 nama_terang=nama_terang,
                 ringkasan_afiliasi=ringkasan_afiliasi,
@@ -946,11 +1028,11 @@ def validasi_form_cv(**k) -> list:
         galat.append("Pas Foto 3x4 belum diunggah.")
     if not st.session_state.berkas_ktp:
         galat.append("Scan KTP belum diunggah.")
-    if not st.session_state.berkas_lisensi:
+    if not k["lapangan"] and not st.session_state.berkas_lisensi:
         galat.append("License Menyelam SCUBA belum diunggah.")
 
-    # --- Pendidikan ---
-    if not k["pendidikan"]:
+    # --- Pendidikan (tidak wajib untuk Pembantu Lapangan) ---
+    if not k["lapangan"] and not k["pendidikan"]:
         galat.append("Riwayat Pendidikan minimal 1 baris harus diisi.")
 
     # --- Isian khusus per jenis CV ---
@@ -969,6 +1051,13 @@ def validasi_form_cv(**k) -> list:
             galat.append("Keahlian Khusus Penyelaman minimal pilih satu.")
         if not k["pengalaman_selam"]:
             galat.append("Pengalaman Penyelaman minimal 1 baris harus diisi.")
+    elif k["lapangan"]:
+        if not k["pekerjaan_sehari_hari"].strip():
+            galat.append("Pekerjaan Sehari-hari belum diisi.")
+        if not k["keterampilan_lapangan"]:
+            galat.append("Keterampilan Khusus Lapangan minimal pilih satu.")
+        if not k["pengalaman_lapangan"]:
+            galat.append("Pengalaman Kerja Lapangan minimal 1 baris harus diisi.")
     else:
         if not k["bidang_keahlian"]:
             galat.append("Bidang Keahlian belum dipilih atau diisi.")
@@ -1008,6 +1097,9 @@ def tampilkan_pratinjau_cv(data: CVData):
         if data.adalah_penyelam():
             kolr2.metric("Pengalaman Selam", len(data.pengalaman_selam))
             kolr3.metric("Total Jam Selam", f"{data.total_jam_selam} jam")
+        elif data.adalah_lapangan():
+            kolr2.metric("Pengalaman Lapangan", len(data.pengalaman_lapangan))
+            kolr3.metric("Keterampilan", len(data.keterampilan_lapangan))
         else:
             kolr2.metric("Pengalaman Kerja", len(data.pengalaman_kerja))
             kolr3.metric("Publikasi", len(data.publikasi))

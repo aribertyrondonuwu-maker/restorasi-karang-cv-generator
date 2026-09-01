@@ -262,6 +262,7 @@ def _pendidikan_tertinggi(pendidikan: list) -> Optional[dict]:
 
 def buat_draf_afiliasi(nama: str, jenis_cv: str,
                        peran_tim: str = "", peran_teknis: str = "",
+                       pekerjaan_sehari_hari: str = "",
                        pendidikan: Optional[list] = None,
                        bidang_keahlian: Optional[list] = None,
                        sertifikasi: Optional[list] = None,
@@ -288,8 +289,8 @@ def buat_draf_afiliasi(nama: str, jenis_cv: str,
     nama_singkat = (nama or "").strip() or "Yang bersangkutan"
 
     ada_data = any([
-        peran_tim, pendidikan, bidang_keahlian, sertifikasi, pengalaman,
-        publikasi, keahlian_selam, lisensi_jenis,
+        peran_tim, pekerjaan_sehari_hari, pendidikan, bidang_keahlian,
+        sertifikasi, pengalaman, publikasi, keahlian_selam, lisensi_jenis,
     ])
     if not ada_data:
         return (
@@ -307,6 +308,13 @@ def buat_draf_afiliasi(nama: str, jenis_cv: str,
         if peran_teknis.strip():
             teks_peran += f" dengan tugas teknis sebagai {peran_teknis}"
         kalimat.append(teks_peran + " pada kegiatan ini.")
+
+    # --- 1b. Pekerjaan sehari-hari (khusus Pembantu Lapangan) ---
+    if pekerjaan_sehari_hari.strip():
+        kalimat.append(
+            f"Pekerjaan sehari-hari yang dijalani adalah sebagai "
+            f"{pekerjaan_sehari_hari}."
+        )
 
     # --- 2. Pendidikan tertinggi ---
     pend_tertinggi = _pendidikan_tertinggi(pendidikan)
