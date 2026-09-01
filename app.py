@@ -9,6 +9,7 @@ Jalankan dengan perintah:  streamlit run app.py
 """
 
 from datetime import date
+import calendar
 
 import pandas as pd
 import streamlit as st
@@ -230,6 +231,11 @@ KETERAMPILAN_LAPANGAN_PILIHAN = [
 PERAN_TIM_PILIHAN = [
     "Ketua Tim Pelaksana", "Anggota Tim Pelaksana", "Pembantu Peneliti",
     "Penyelam Bersertifikat", "Pembantu Lapangan",
+]
+
+BULAN_PILIHAN = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ]
 
 
@@ -494,6 +500,10 @@ def bersihkan_tabel(kerangka: pd.DataFrame) -> list:
 def halaman_cv():
     """Menampilkan halaman form dan pembuatan dokumen Curriculum Vitae."""
     st.markdown("## 📄 Generator Curriculum Vitae")
+    st.caption(
+        "Semua kolom dapat dikosongkan bila belum ada datanya — dokumen "
+        "tetap bisa dibuat dan dilengkapi kemudian."
+    )
 
     jenis_cv = st.radio(
         "Jenis CV yang akan dibuat",
@@ -513,374 +523,367 @@ def halaman_cv():
     lapangan = jenis_cv == JENIS_PEMBANTU_LAPANGAN
     ahli_atau_peneliti = jenis_cv in (JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI)
 
-    # Tempat menampilkan blok galat validasi di bagian atas form
-    wadah_galat = st.container()
+    # Tempat menampilkan pengingat non-blocking setelah dokumen dibuat
+    wadah_pengingat = st.container()
 
-    # ---------------------------------------------------------------
-    # 1. DATA PRIBADI
-    # ---------------------------------------------------------------
-    st.markdown("### 👤 Data Pribadi")
-    kol1, kol2, kol3 = st.columns(3)
+    with st.form("form_cv", clear_on_submit=False):
+        # ---------------------------------------------------------------
+        # 1. DATA PRIBADI
+        # ---------------------------------------------------------------
+        st.markdown("### 👤 Data Pribadi")
+        kol1, kol2, kol3 = st.columns(3)
 
-    with kol1:
-        nama = st.text_input("Nama Lengkap (dengan gelar) *", key="cv_nama")
-        tempat_lahir = st.text_input("Tempat Lahir *", key="cv_tempat_lahir")
-        tanggal_lahir = st.date_input(
-            "Tanggal Lahir *", value=date(1990, 1, 1),
-            min_value=date(1940, 1, 1), max_value=date.today(),
-            format="DD/MM/YYYY", key="cv_tanggal_lahir",
+        with kol1:
+            nama = st.text_input("Nama Lengkap (dengan gelar)", key="cv_nama")
+            tempat_lahir = st.text_input("Tempat Lahir", key="cv_tempat_lahir")
+
+            st.markdown("Tanggal Lahir")
+            koltl1, koltl2, koltl3 = st.columns([1, 1.4, 1.2])
+            with koltl1:
+                hari_lahir = st.selectbox(
+                    "Tanggal", list(range(1, 32)), index=0,
+                    key="cv_hari_lahir", label_visibility="collapsed",
+                )
+            with koltl2:
+                bulan_lahir = st.selectbox(
+                    "Bulan", BULAN_PILIHAN, index=0,
+                    key="cv_bulan_lahir", label_visibility="collapsed",
+                )
+            with koltl3:
+                tahun_sekarang = date.today().year
+                daftar_tahun = list(range(tahun_sekarang, 1939, -1))
+                tahun_lahir = st.selectbox(
+                    "Tahun", daftar_tahun,
+                    index=daftar_tahun.index(tahun_sekarang - 40)
+                    if (tahun_sekarang - 40) in daftar_tahun else 0,
+                    key="cv_tahun_lahir", label_visibility="collapsed",
+                )
+            try:
+                hari_maks = calendar.monthrange(
+                    tahun_lahir, BULAN_PILIHAN.index(bulan_lahir) + 1
+                )[1]
+                tanggal_lahir = date(
+                    tahun_lahir, BULAN_PILIHAN.index(bulan_lahir) + 1,
+                    min(hari_lahir, hari_maks),
+                )
+            except ValueError:
+                tanggal_lahir = date(tahun_lahir, 1, 1)
+
+            jenis_kelamin = st.selectbox(
+                "Jenis Kelamin", ["", "Laki-laki", "Perempuan"],
+                key="cv_jenis_kelamin",
+            )
+
+        with kol2:
+            agama = st.selectbox(
+                "Agama",
+                ["", "Islam", "Kristen Protestan", "Katolik", "Hindu", "Buddha",
+                 "Khonghucu", "Lainnya"],
+                key="cv_agama",
+            )
+            kewarganegaraan = st.text_input(
+                "Kewarganegaraan", value="Indonesia", key="cv_kewarganegaraan"
+            )
+            nomor_ktp = st.text_input(
+                "Nomor KTP (NIK)", max_chars=16, key="cv_nomor_ktp",
+                help="16 digit angka, sebaiknya sama dengan nomor pada scan KTP.",
+            )
+            npwp = st.text_input("NPWP (opsional)", key="cv_npwp")
+
+        with kol3:
+            telepon = st.text_input("Nomor Telepon / HP", key="cv_telepon")
+            email = st.text_input("Email", key="cv_email")
+            alamat = st.text_area("Alamat Lengkap", height=100, key="cv_alamat")
+
+        with st.expander("Data kepegawaian dan peran dalam tim (opsional untuk non-ASN)"):
+            kolp1, kolp2 = st.columns(2)
+            with kolp1:
+                nip = st.text_input("NIP", key="cv_nip")
+                nidn = st.text_input("NIDN", key="cv_nidn")
+                jabatan = st.text_input("Jabatan Fungsional", key="cv_jabatan")
+            with kolp2:
+                afiliasi = st.text_input(
+                    "Afiliasi Institusi",
+                    value="Fakultas Perikanan dan Ilmu Kelautan, "
+                          "Universitas Sam Ratulangi",
+                    key="cv_afiliasi",
+                )
+                peran_tim = st.selectbox(
+                    "Kedudukan dalam Tim", [""] + PERAN_TIM_PILIHAN,
+                    key="cv_peran_tim",
+                )
+                peran_teknis = st.text_input("Peran Teknis", key="cv_peran_teknis")
+
+        # ---------------------------------------------------------------
+        # 2. UPLOAD DOKUMEN
+        # ---------------------------------------------------------------
+        bagian_unggah_dokumen("cv", wajib_lisensi=not lapangan)
+
+        # ---------------------------------------------------------------
+        # 3. PENDIDIKAN
+        # ---------------------------------------------------------------
+        judul_pendidikan = (
+            "🎓 Pendidikan Formal (opsional)" if (penyelam or lapangan)
+            else "🎓 Riwayat Pendidikan"
         )
-        jenis_kelamin = st.selectbox(
-            "Jenis Kelamin *", ["", "Laki-laki", "Perempuan"],
-            key="cv_jenis_kelamin",
+        st.markdown(f"### {judul_pendidikan}")
+        st.caption("Klik baris terakhir untuk menambah data.")
+        st.session_state.pendidikan = st.data_editor(
+            st.session_state.pendidikan,
+            num_rows="dynamic", width="stretch", key="ed_pendidikan",
+            column_config={
+                "Jenjang": st.column_config.SelectboxColumn(
+                    "Jenjang",
+                    options=["SD", "SMP", "SMA/SMK", "D3", "D4", "S1", "S2", "S3"],
+                    width="small",
+                ),
+                "Tahun Lulus": st.column_config.TextColumn("Tahun Lulus", width="small"),
+            },
         )
 
-    with kol2:
-        agama = st.selectbox(
-            "Agama *",
-            ["", "Islam", "Kristen Protestan", "Katolik", "Hindu", "Buddha",
-             "Khonghucu", "Lainnya"],
-            key="cv_agama",
-        )
-        kewarganegaraan = st.text_input(
-            "Kewarganegaraan *", value="Indonesia", key="cv_kewarganegaraan"
-        )
-        nomor_ktp = st.text_input(
-            "Nomor KTP (NIK) *", max_chars=16, key="cv_nomor_ktp",
-            help="16 digit angka, harus sama dengan nomor pada scan KTP.",
-        )
-        npwp = st.text_input("NPWP (opsional)", key="cv_npwp")
-
-    with kol3:
-        telepon = st.text_input("Nomor Telepon / HP *", key="cv_telepon")
-        email = st.text_input("Email *", key="cv_email")
-        alamat = st.text_area("Alamat Lengkap *", height=100, key="cv_alamat")
-
-    with st.expander("Data kepegawaian dan peran dalam tim (opsional untuk non-ASN)"):
-        kolp1, kolp2 = st.columns(2)
-        with kolp1:
-            nip = st.text_input("NIP", key="cv_nip")
-            nidn = st.text_input("NIDN", key="cv_nidn")
-            jabatan = st.text_input("Jabatan Fungsional", key="cv_jabatan")
-        with kolp2:
-            afiliasi = st.text_input(
-                "Afiliasi Institusi",
-                value="Fakultas Perikanan dan Ilmu Kelautan, "
-                      "Universitas Sam Ratulangi",
-                key="cv_afiliasi",
-            )
-            peran_tim = st.selectbox(
-                "Kedudukan dalam Tim", [""] + PERAN_TIM_PILIHAN,
-                key="cv_peran_tim",
-            )
-            peran_teknis = st.text_input("Peran Teknis", key="cv_peran_teknis")
-
-    # ---------------------------------------------------------------
-    # 2. UPLOAD DOKUMEN
-    # ---------------------------------------------------------------
-    bagian_unggah_dokumen("cv", wajib_lisensi=not lapangan)
-
-    # ---------------------------------------------------------------
-    # 3. PENDIDIKAN
-    # ---------------------------------------------------------------
-    judul_pendidikan = (
-        "🎓 Pendidikan Formal" if penyelam else "🎓 Riwayat Pendidikan"
-    )
-    st.markdown(f"### {judul_pendidikan}")
-    st.caption("Klik baris terakhir untuk menambah data. Minimal 1 baris wajib diisi.")
-    st.session_state.pendidikan = st.data_editor(
-        st.session_state.pendidikan,
-        num_rows="dynamic", width="stretch", key="ed_pendidikan",
-        column_config={
-            "Jenjang": st.column_config.SelectboxColumn(
-                "Jenjang", options=["SMA/SMK", "D3", "D4", "S1", "S2", "S3"],
-                width="small",
-            ),
-            "Tahun Lulus": st.column_config.TextColumn("Tahun Lulus", width="small"),
-        },
-    )
-
-    # ---------------------------------------------------------------
-    # 4. BAGIAN KHUSUS SESUAI JENIS CV
-    # ---------------------------------------------------------------
-    if penyelam:
-        st.markdown("### 🤿 Sertifikat Selam Utama")
-        kols1, kols2, kols3 = st.columns(3)
-        with kols1:
-            lisensi_jenis = st.selectbox(
-                "Jenis Lisensi *",
-                ["", "PADI", "SSI", "CMAS", "TNI-AL", "Lainnya"],
-                key="cv_lisensi_jenis",
-            )
-            lisensi_nomor = st.text_input(
-                "Nomor Sertifikat *", key="cv_lisensi_nomor"
-            )
-        with kols2:
-            lisensi_level = st.selectbox(
-                "Level Sertifikasi *",
-                ["", "Open Water", "Advanced", "Rescue Diver", "Divemaster",
-                 "Instructor", "Scientific Diver"],
-                key="cv_lisensi_level",
-            )
-            lisensi_terbit = st.date_input(
-                "Tanggal Terbit *", value=date(2020, 1, 1),
-                min_value=date(1970, 1, 1), format="DD/MM/YYYY",
-                key="cv_lisensi_terbit",
-            )
-        with kols3:
-            seumur_hidup = st.checkbox(
-                "Berlaku seumur hidup", value=True, key="cv_lisensi_seumur"
-            )
-            lisensi_berlaku = None
-            if not seumur_hidup:
-                lisensi_berlaku = st.date_input(
-                    "Masa Berlaku", value=date(2030, 1, 1),
+        # ---------------------------------------------------------------
+        # 4. BAGIAN KHUSUS SESUAI JENIS CV
+        # ---------------------------------------------------------------
+        if penyelam:
+            st.markdown("### 🤿 Sertifikat Selam Utama")
+            kols1, kols2, kols3 = st.columns(3)
+            with kols1:
+                lisensi_jenis = st.selectbox(
+                    "Jenis Lisensi",
+                    ["", "PADI", "SSI", "CMAS", "TNI-AL", "Lainnya"],
+                    key="cv_lisensi_jenis",
+                )
+                lisensi_nomor = st.text_input(
+                    "Nomor Sertifikat", key="cv_lisensi_nomor"
+                )
+            with kols2:
+                lisensi_level = st.selectbox(
+                    "Level Sertifikasi",
+                    ["", "Open Water", "Advanced", "Rescue Diver", "Divemaster",
+                     "Instructor", "Scientific Diver"],
+                    key="cv_lisensi_level",
+                )
+                lisensi_terbit = st.date_input(
+                    "Tanggal Terbit", value=date(2020, 1, 1),
+                    min_value=date(1970, 1, 1), format="DD/MM/YYYY",
+                    key="cv_lisensi_terbit",
+                )
+            with kols3:
+                seumur_hidup = st.checkbox(
+                    "Berlaku seumur hidup", value=True, key="cv_lisensi_seumur"
+                )
+                lisensi_berlaku_input = st.date_input(
+                    "Masa Berlaku (abaikan bila seumur hidup)",
+                    value=date(2030, 1, 1),
                     format="DD/MM/YYYY", key="cv_lisensi_berlaku",
                 )
+                lisensi_berlaku = None if seumur_hidup else lisensi_berlaku_input
 
-        st.markdown("### 🩺 Sertifikat Medis Selam (Fit to Dive)")
-        kolm1, kolm2 = st.columns(2)
-        with kolm1:
-            medis_nomor = st.text_input("Nomor Sertifikat *", key="cv_medis_nomor")
-            medis_penerbit = st.text_input(
-                "Nama Dokter / Klinik Penerbit *", key="cv_medis_penerbit"
+            st.markdown("### 🩺 Sertifikat Medis Selam (Fit to Dive) — opsional")
+            kolm1, kolm2 = st.columns(2)
+            with kolm1:
+                medis_nomor = st.text_input("Nomor Sertifikat", key="cv_medis_nomor")
+                medis_penerbit = st.text_input(
+                    "Nama Dokter / Klinik Penerbit", key="cv_medis_penerbit"
+                )
+            with kolm2:
+                medis_terbit = st.date_input(
+                    "Tanggal Terbit", value=date.today(),
+                    format="DD/MM/YYYY", key="cv_medis_terbit",
+                )
+                medis_berlaku = st.date_input(
+                    "Berlaku Sampai", value=date(date.today().year + 1, 1, 1),
+                    format="DD/MM/YYYY", key="cv_medis_berlaku",
+                )
+
+            st.markdown("### 🌊 Kompetensi Penyelaman")
+            total_jam_selam = st.number_input(
+                "Total Jam Selam Terverifikasi (jam)",
+                min_value=0, max_value=100000, step=10, key="cv_total_jam",
             )
-        with kolm2:
-            medis_terbit = st.date_input(
-                "Tanggal Terbit *", value=date.today(),
-                format="DD/MM/YYYY", key="cv_medis_terbit",
+            st.markdown("**Keahlian Khusus Penyelaman** (pilih yang sesuai)")
+            kolk = st.columns(2)
+            keahlian_selam = []
+            for i, keahlian in enumerate(KEAHLIAN_SELAM_PILIHAN):
+                with kolk[i % 2]:
+                    if st.checkbox(keahlian, key=f"cv_keahlian_{i}"):
+                        keahlian_selam.append(keahlian)
+
+            st.markdown("### 🐠 Pengalaman Penyelaman")
+            st.caption("Klik baris terakhir untuk menambah data.")
+            st.session_state.pengalaman_selam = st.data_editor(
+                st.session_state.pengalaman_selam,
+                num_rows="dynamic", width="stretch",
+                key="ed_pengalaman_selam",
+                column_config={
+                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
+                    "Kedalaman Maks (m)": st.column_config.TextColumn(
+                        "Kedalaman Maks (m)", width="small"
+                    ),
+                },
             )
-            medis_berlaku = st.date_input(
-                "Berlaku Sampai *", value=date(date.today().year + 1, 1, 1),
-                format="DD/MM/YYYY", key="cv_medis_berlaku",
+
+            bidang_keahlian = []
+            publikasi_bersih = []
+            pekerjaan_sehari_hari = ""
+            keterampilan_lapangan = []
+
+        elif lapangan:
+            st.markdown("### 🛶 Pekerjaan dan Keterampilan Lapangan")
+            pekerjaan_sehari_hari = st.text_input(
+                "Pekerjaan Sehari-hari", key="cv_pekerjaan_sehari_hari",
+                placeholder="Contoh: Nelayan, Buruh Harian, Petani",
+            )
+            st.markdown("**Keterampilan Khusus Lapangan** (pilih yang sesuai)")
+            kolkl = st.columns(2)
+            keterampilan_lapangan = []
+            for i, ket in enumerate(KETERAMPILAN_LAPANGAN_PILIHAN):
+                with kolkl[i % 2]:
+                    if st.checkbox(ket, key=f"cv_ket_lapangan_{i}"):
+                        keterampilan_lapangan.append(ket)
+            keterampilan_manual = st.text_input(
+                "Keterampilan lainnya (pisahkan dengan koma)",
+                key="cv_ket_lapangan_manual",
+            )
+            if keterampilan_manual.strip():
+                keterampilan_lapangan += [
+                    k.strip() for k in keterampilan_manual.split(",") if k.strip()
+                ]
+
+            st.markdown("### 🧰 Pengalaman Kerja Lapangan")
+            st.caption("Klik baris terakhir untuk menambah data.")
+            st.session_state.pengalaman_lapangan = st.data_editor(
+                st.session_state.pengalaman_lapangan,
+                num_rows="dynamic", width="stretch",
+                key="ed_pengalaman_lapangan",
+                column_config={
+                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
+                },
             )
 
-        st.markdown("### 🌊 Kompetensi Penyelaman")
-        total_jam_selam = st.number_input(
-            "Total Jam Selam Terverifikasi (jam) *",
-            min_value=0, max_value=100000, step=10, key="cv_total_jam",
-        )
-        st.markdown("**Keahlian Khusus Penyelaman** (pilih yang sesuai)")
-        kolk = st.columns(2)
-        keahlian_selam = []
-        for i, keahlian in enumerate(KEAHLIAN_SELAM_PILIHAN):
-            with kolk[i % 2]:
-                if st.checkbox(keahlian, key=f"cv_keahlian_{i}"):
-                    keahlian_selam.append(keahlian)
+            bidang_keahlian = []
+            publikasi_bersih = []
+            lisensi_jenis = lisensi_nomor = lisensi_level = ""
+            lisensi_terbit = lisensi_berlaku = None
+            medis_nomor = medis_penerbit = ""
+            medis_terbit = medis_berlaku = None
+            total_jam_selam = 0
+            keahlian_selam = []
 
-        st.markdown("### 🐠 Pengalaman Penyelaman")
-        st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
-        st.session_state.pengalaman_selam = st.data_editor(
-            st.session_state.pengalaman_selam,
-            num_rows="dynamic", width="stretch",
-            key="ed_pengalaman_selam",
-            column_config={
-                "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-                "Kedalaman Maks (m)": st.column_config.TextColumn(
-                    "Kedalaman Maks (m)", width="small"
-                ),
-            },
-        )
+        else:
+            st.markdown("### 🔬 Bidang Keahlian")
+            bidang_pilih = st.multiselect(
+                "Pilih bidang keahlian", BIDANG_KEAHLIAN_PILIHAN,
+                key="cv_bidang_pilih",
+            )
+            bidang_manual = st.text_input(
+                "Bidang keahlian lainnya (pisahkan dengan koma)",
+                key="cv_bidang_manual",
+            )
+            bidang_keahlian = list(bidang_pilih)
+            if bidang_manual.strip():
+                bidang_keahlian += [
+                    b.strip() for b in bidang_manual.split(",") if b.strip()
+                ]
 
-        bidang_keahlian = []
-        publikasi_bersih = []
-        pekerjaan_sehari_hari = ""
-        keterampilan_lapangan = []
+            lisensi_jenis = lisensi_nomor = lisensi_level = ""
+            lisensi_terbit = lisensi_berlaku = None
+            medis_nomor = medis_penerbit = ""
+            medis_terbit = medis_berlaku = None
+            total_jam_selam = 0
+            keahlian_selam = []
+            pekerjaan_sehari_hari = ""
+            keterampilan_lapangan = []
 
-    elif lapangan:
-        st.markdown("### 🛶 Pekerjaan dan Keterampilan Lapangan")
-        pekerjaan_sehari_hari = st.text_input(
-            "Pekerjaan Sehari-hari *", key="cv_pekerjaan_sehari_hari",
-            placeholder="Contoh: Nelayan, Buruh Harian, Petani",
-        )
-        st.markdown("**Keterampilan Khusus Lapangan** (pilih yang sesuai)")
-        kolkl = st.columns(2)
-        keterampilan_lapangan = []
-        for i, ket in enumerate(KETERAMPILAN_LAPANGAN_PILIHAN):
-            with kolkl[i % 2]:
-                if st.checkbox(ket, key=f"cv_ket_lapangan_{i}"):
-                    keterampilan_lapangan.append(ket)
-        keterampilan_manual = st.text_input(
-            "Keterampilan lainnya (pisahkan dengan koma)",
-            key="cv_ket_lapangan_manual",
-        )
-        if keterampilan_manual.strip():
-            keterampilan_lapangan += [
-                k.strip() for k in keterampilan_manual.split(",") if k.strip()
-            ]
-
-        st.markdown("### 🧰 Pengalaman Kerja Lapangan")
-        st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
-        st.session_state.pengalaman_lapangan = st.data_editor(
-            st.session_state.pengalaman_lapangan,
-            num_rows="dynamic", width="stretch",
-            key="ed_pengalaman_lapangan",
+        # ---------------------------------------------------------------
+        # 5. SERTIFIKASI KOMPETENSI
+        # ---------------------------------------------------------------
+        judul_sertifikasi = "📜 Sertifikasi Kompetensi (opsional)"
+        st.markdown(f"### {judul_sertifikasi}")
+        st.session_state.sertifikasi = st.data_editor(
+            st.session_state.sertifikasi,
+            num_rows="dynamic", width="stretch", key="ed_sertifikasi",
             column_config={
                 "Tahun": st.column_config.TextColumn("Tahun", width="small"),
             },
         )
 
-        bidang_keahlian = []
-        publikasi_bersih = []
-        lisensi_jenis = lisensi_nomor = lisensi_level = ""
-        lisensi_terbit = lisensi_berlaku = None
-        medis_nomor = medis_penerbit = ""
-        medis_terbit = medis_berlaku = None
-        total_jam_selam = 0
-        keahlian_selam = []
+        # ---------------------------------------------------------------
+        # 6. PENGALAMAN KERJA DAN PUBLIKASI (Tenaga Ahli/Pembantu Peneliti)
+        # ---------------------------------------------------------------
+        if ahli_atau_peneliti:
+            st.markdown("### 💼 Pengalaman Kerja")
+            st.caption("Klik baris terakhir untuk menambah data.")
+            st.session_state.pengalaman_kerja = st.data_editor(
+                st.session_state.pengalaman_kerja,
+                num_rows="dynamic", width="stretch",
+                key="ed_pengalaman_kerja",
+                column_config={
+                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
+                },
+            )
 
-    else:
-        st.markdown("### 🔬 Bidang Keahlian")
-        bidang_pilih = st.multiselect(
-            "Pilih bidang keahlian *", BIDANG_KEAHLIAN_PILIHAN,
-            key="cv_bidang_pilih",
+            st.markdown("### 📚 Publikasi Ilmiah (opsional)")
+            st.session_state.publikasi = st.data_editor(
+                st.session_state.publikasi,
+                num_rows="dynamic", width="stretch", key="ed_publikasi",
+                column_config={
+                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
+                },
+            )
+
+        # ---------------------------------------------------------------
+        # 6b. RINGKASAN KETERKAITAN DENGAN KEGIATAN
+        # ---------------------------------------------------------------
+        st.markdown("### 🔗 Ringkasan Keterkaitan dengan Kegiatan")
+        st.caption(
+            "Boleh dikosongkan — akan disusun otomatis dari data di atas saat "
+            "tombol Generate CV ditekan. Kolom ini tetap bisa disunting atau "
+            "ditulis manual sepenuhnya."
         )
-        bidang_manual = st.text_input(
-            "Bidang keahlian lainnya (pisahkan dengan koma)",
-            key="cv_bidang_manual",
-        )
-        bidang_keahlian = list(bidang_pilih)
-        if bidang_manual.strip():
-            bidang_keahlian += [
-                b.strip() for b in bidang_manual.split(",") if b.strip()
-            ]
-
-        lisensi_jenis = lisensi_nomor = lisensi_level = ""
-        lisensi_terbit = lisensi_berlaku = None
-        medis_nomor = medis_penerbit = ""
-        medis_terbit = medis_berlaku = None
-        total_jam_selam = 0
-        keahlian_selam = []
-        pekerjaan_sehari_hari = ""
-        keterampilan_lapangan = []
-
-    # ---------------------------------------------------------------
-    # 5. SERTIFIKASI KOMPETENSI
-    # ---------------------------------------------------------------
-    if ahli_atau_peneliti:
-        judul_sertifikasi = "📜 Sertifikasi Kompetensi"
-    else:
-        judul_sertifikasi = "📜 Sertifikasi Kompetensi Lainnya (opsional)"
-    st.markdown(f"### {judul_sertifikasi}")
-    st.session_state.sertifikasi = st.data_editor(
-        st.session_state.sertifikasi,
-        num_rows="dynamic", width="stretch", key="ed_sertifikasi",
-        column_config={
-            "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-        },
-    )
-
-    # ---------------------------------------------------------------
-    # 6. PENGALAMAN KERJA DAN PUBLIKASI (khusus Tenaga Ahli/Pembantu Peneliti)
-    # ---------------------------------------------------------------
-    publikasi_bersih = []
-    if ahli_atau_peneliti:
-        st.markdown("### 💼 Pengalaman Kerja")
-        st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
-        st.session_state.pengalaman_kerja = st.data_editor(
-            st.session_state.pengalaman_kerja,
-            num_rows="dynamic", width="stretch",
-            key="ed_pengalaman_kerja",
-            column_config={
-                "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-            },
+        ringkasan_afiliasi = st.text_area(
+            "Ringkasan Keterkaitan dengan Kegiatan",
+            key="cv_ringkasan_afiliasi", height=140,
+            label_visibility="collapsed",
+            placeholder=(
+                "Kosongkan untuk dibuatkan draf otomatis, atau tulis sendiri "
+                "di sini."
+            ),
         )
 
-        st.markdown("### 📚 Publikasi Ilmiah (opsional)")
-        st.session_state.publikasi = st.data_editor(
-            st.session_state.publikasi,
-            num_rows="dynamic", width="stretch", key="ed_publikasi",
-            column_config={
-                "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-            },
+        # ---------------------------------------------------------------
+        # 7. PERNYATAAN DAN TANDA TANGAN
+        # ---------------------------------------------------------------
+        st.markdown("### ✍️ Pernyataan dan Tanda Tangan")
+        st.info(
+            "Demikian daftar riwayat hidup ini saya buat dengan sebenar-benarnya "
+            "untuk dapat dipergunakan sebagaimana mestinya."
         )
-        publikasi_bersih = bersihkan_tabel(st.session_state.publikasi)
+        kolt1, kolt2, kolt3 = st.columns(3)
+        with kolt1:
+            tempat_ttd = st.text_input("Tempat", value="Bitung", key="cv_tempat_ttd")
+        with kolt2:
+            tanggal_ttd = st.date_input(
+                "Tanggal", value=date.today(), format="DD/MM/YYYY",
+                key="cv_tanggal_ttd",
+            )
+        with kolt3:
+            nama_terang = st.text_input(
+                "Nama Terang", key="cv_nama_terang",
+                help="Kosongkan untuk memakai nama lengkap di atas.",
+            )
 
-    # ---------------------------------------------------------------
-    # 6b. RINGKASAN KETERKAITAN DENGAN KEGIATAN
-    # ---------------------------------------------------------------
-    st.markdown("### 🔗 Ringkasan Keterkaitan dengan Kegiatan")
-    st.caption(
-        "Ringkasan berikut menjelaskan keterkaitan riwayat pengalaman, "
-        "penelitian, dan keahlian di atas dengan kegiatan restorasi terumbu "
-        "karang. Disusun otomatis dari data yang sudah diisi, dan dapat "
-        "disunting atau ditambahkan secara manual sebelum dokumen dibuat."
-    )
-
-    pendidikan_pratinjau = bersihkan_tabel(st.session_state.pendidikan)
-    sertifikasi_pratinjau = bersihkan_tabel(st.session_state.sertifikasi)
-    if penyelam:
-        pengalaman_pratinjau = bersihkan_tabel(st.session_state.pengalaman_selam)
-    elif lapangan:
-        pengalaman_pratinjau = bersihkan_tabel(st.session_state.pengalaman_lapangan)
-    else:
-        pengalaman_pratinjau = bersihkan_tabel(st.session_state.pengalaman_kerja)
-    publikasi_pratinjau = (
-        bersihkan_tabel(st.session_state.publikasi) if ahli_atau_peneliti else []
-    )
-    medis_masih_berlaku = bool(
-        penyelam and medis_berlaku and medis_berlaku >= date.today()
-    )
-    keahlian_untuk_draf = keterampilan_lapangan if lapangan else bidang_keahlian
-
-    if st.button("🔄 Buat / Perbarui Draf Otomatis", key="cv_tombol_draf_afiliasi"):
-        st.session_state.cv_ringkasan_afiliasi = utils.buat_draf_afiliasi(
-            nama=nama, jenis_cv=jenis_cv,
-            peran_tim=peran_tim, peran_teknis=peran_teknis,
-            pekerjaan_sehari_hari=pekerjaan_sehari_hari if lapangan else "",
-            pendidikan=pendidikan_pratinjau,
-            bidang_keahlian=keahlian_untuk_draf,
-            sertifikasi=sertifikasi_pratinjau,
-            pengalaman=pengalaman_pratinjau, publikasi=publikasi_pratinjau,
-            keahlian_selam=keahlian_selam,
-            total_jam_selam=int(total_jam_selam) if penyelam else 0,
-            lisensi_jenis=lisensi_jenis if penyelam else "",
-            lisensi_level=lisensi_level if penyelam else "",
-            medis_masih_berlaku=medis_masih_berlaku,
+        # ---------------------------------------------------------------
+        # 8. TOMBOL GENERATE
+        # ---------------------------------------------------------------
+        st.markdown("---")
+        tekan_generate = st.form_submit_button(
+            "⚡ Generate CV", type="primary", width="stretch",
         )
 
-    ringkasan_afiliasi = st.text_area(
-        "Ringkasan Keterkaitan dengan Kegiatan",
-        key="cv_ringkasan_afiliasi", height=140,
-        label_visibility="collapsed",
-        placeholder=(
-            "Klik tombol di atas untuk membuat draf otomatis, lalu sunting "
-            "atau tambahkan sesuai kebutuhan. Boleh juga ditulis manual "
-            "sepenuhnya tanpa memakai draf otomatis."
-        ),
-    )
-
-    # ---------------------------------------------------------------
-    # 7. PERNYATAAN DAN TANDA TANGAN
-    # ---------------------------------------------------------------
-    st.markdown("### ✍️ Pernyataan dan Tanda Tangan")
-    st.info(
-        "Demikian daftar riwayat hidup ini saya buat dengan sebenar-benarnya "
-        "untuk dapat dipergunakan sebagaimana mestinya."
-    )
-    kolt1, kolt2, kolt3 = st.columns(3)
-    with kolt1:
-        tempat_ttd = st.text_input("Tempat", value="Bitung", key="cv_tempat_ttd")
-    with kolt2:
-        tanggal_ttd = st.date_input(
-            "Tanggal", value=date.today(), format="DD/MM/YYYY",
-            key="cv_tanggal_ttd",
-        )
-    with kolt3:
-        nama_terang = st.text_input(
-            "Nama Terang", key="cv_nama_terang",
-            help="Kosongkan untuk memakai nama lengkap di atas.",
-        )
-
-    # ---------------------------------------------------------------
-    # 8. TOMBOL GENERATE DAN VALIDASI
-    # ---------------------------------------------------------------
-    st.markdown("---")
-    tekan_generate = st.button(
-        "⚡ Generate CV", type="primary", width="stretch",
-        key="tombol_generate_cv",
-    )
-
+    # =====================================================================
+    # PEMROSESAN SETELAH FORM DIKIRIM
+    # =====================================================================
     if tekan_generate:
         pendidikan_bersih = bersihkan_tabel(st.session_state.pendidikan)
         sertifikasi_bersih = bersihkan_tabel(st.session_state.sertifikasi)
@@ -889,79 +892,98 @@ def halaman_cv():
         publikasi_bersih = bersihkan_tabel(st.session_state.publikasi)
         lapangan_bersih = bersihkan_tabel(st.session_state.pengalaman_lapangan)
 
-        galat = validasi_form_cv(
-            penyelam=penyelam, lapangan=lapangan,
-            ahli_atau_peneliti=ahli_atau_peneliti,
+        if penyelam:
+            pengalaman_untuk_draf = selam_bersih
+        elif lapangan:
+            pengalaman_untuk_draf = lapangan_bersih
+        else:
+            pengalaman_untuk_draf = kerja_bersih
+        keahlian_untuk_draf = keterampilan_lapangan if lapangan else bidang_keahlian
+        medis_masih_berlaku = bool(
+            penyelam and medis_berlaku and medis_berlaku >= date.today()
+        )
+
+        # Susun draf otomatis hanya bila kolom ringkasan masih kosong
+        if not ringkasan_afiliasi.strip():
+            ringkasan_afiliasi = utils.buat_draf_afiliasi(
+                nama=nama, jenis_cv=jenis_cv,
+                peran_tim=peran_tim, peran_teknis=peran_teknis,
+                pekerjaan_sehari_hari=pekerjaan_sehari_hari if lapangan else "",
+                pendidikan=pendidikan_bersih,
+                bidang_keahlian=keahlian_untuk_draf,
+                sertifikasi=sertifikasi_bersih,
+                pengalaman=pengalaman_untuk_draf, publikasi=publikasi_bersih,
+                keahlian_selam=keahlian_selam,
+                total_jam_selam=int(total_jam_selam) if penyelam else 0,
+                lisensi_jenis=lisensi_jenis if penyelam else "",
+                lisensi_level=lisensi_level if penyelam else "",
+                medis_masih_berlaku=medis_masih_berlaku,
+            )
+            st.session_state.cv_ringkasan_afiliasi = ringkasan_afiliasi
+
+        # Catatan kekurangan bersifat informasional saja — TIDAK memblokir
+        catatan = catat_kekurangan_cv(
             nama=nama, tempat_lahir=tempat_lahir,
-            jenis_kelamin=jenis_kelamin, agama=agama,
-            kewarganegaraan=kewarganegaraan, alamat=alamat, telepon=telepon,
-            email=email, nomor_ktp=nomor_ktp,
-            pendidikan=pendidikan_bersih, bidang_keahlian=bidang_keahlian,
-            pengalaman_kerja=kerja_bersih, pengalaman_selam=selam_bersih,
+            jenis_kelamin=jenis_kelamin, agama=agama, nomor_ktp=nomor_ktp,
+            email=email,
+        )
+
+        data = CVData(
+            jenis_cv=jenis_cv,
+            nama=nama, tempat_lahir=tempat_lahir,
+            tanggal_lahir=tanggal_lahir, jenis_kelamin=jenis_kelamin,
+            agama=agama, kewarganegaraan=kewarganegaraan, alamat=alamat,
+            telepon=telepon, email=email, nomor_ktp=nomor_ktp, npwp=npwp,
+            nip=nip, nidn=nidn, jabatan=jabatan, afiliasi=afiliasi,
+            peran_tim=peran_tim, peran_teknis=peran_teknis,
+            pendidikan=pendidikan_bersih,
+            sertifikasi=sertifikasi_bersih,
+            pengalaman_kerja=kerja_bersih,
+            publikasi=publikasi_bersih,
+            bidang_keahlian=bidang_keahlian,
             lisensi_jenis=lisensi_jenis, lisensi_nomor=lisensi_nomor,
-            lisensi_level=lisensi_level, medis_nomor=medis_nomor,
-            medis_penerbit=medis_penerbit, keahlian_selam=keahlian_selam,
+            lisensi_level=lisensi_level, lisensi_terbit=lisensi_terbit,
+            lisensi_berlaku=lisensi_berlaku,
+            medis_nomor=medis_nomor, medis_penerbit=medis_penerbit,
+            medis_terbit=medis_terbit, medis_berlaku=medis_berlaku,
+            total_jam_selam=int(total_jam_selam),
+            keahlian_selam=keahlian_selam,
+            pengalaman_selam=selam_bersih,
             pekerjaan_sehari_hari=pekerjaan_sehari_hari,
             keterampilan_lapangan=keterampilan_lapangan,
             pengalaman_lapangan=lapangan_bersih,
+            tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
+            nama_terang=nama_terang,
+            ringkasan_afiliasi=ringkasan_afiliasi,
+            foto=(st.session_state.berkas_foto.getvalue()
+                  if st.session_state.berkas_foto else None),
+            lampiran=susun_lampiran(),
         )
 
-        if galat:
-            with wadah_galat:
-                pesan = "\n".join(f"- {g}" for g in galat)
-                st.error(
-                    f"**Dokumen belum dapat dibuat. Lengkapi "
-                    f"{len(galat)} hal berikut:**\n\n{pesan}"
-                )
-            st.session_state.hasil_cv_pdf = None
-            st.session_state.hasil_cv_docx = None
-        else:
-            data = CVData(
-                jenis_cv=jenis_cv,
-                nama=nama, tempat_lahir=tempat_lahir,
-                tanggal_lahir=tanggal_lahir, jenis_kelamin=jenis_kelamin,
-                agama=agama, kewarganegaraan=kewarganegaraan, alamat=alamat,
-                telepon=telepon, email=email, nomor_ktp=nomor_ktp, npwp=npwp,
-                nip=nip, nidn=nidn, jabatan=jabatan, afiliasi=afiliasi,
-                peran_tim=peran_tim, peran_teknis=peran_teknis,
-                pendidikan=pendidikan_bersih,
-                sertifikasi=sertifikasi_bersih,
-                pengalaman_kerja=kerja_bersih,
-                publikasi=publikasi_bersih,
-                bidang_keahlian=bidang_keahlian,
-                lisensi_jenis=lisensi_jenis, lisensi_nomor=lisensi_nomor,
-                lisensi_level=lisensi_level, lisensi_terbit=lisensi_terbit,
-                lisensi_berlaku=lisensi_berlaku,
-                medis_nomor=medis_nomor, medis_penerbit=medis_penerbit,
-                medis_terbit=medis_terbit, medis_berlaku=medis_berlaku,
-                total_jam_selam=int(total_jam_selam),
-                keahlian_selam=keahlian_selam,
-                pengalaman_selam=selam_bersih,
-                pekerjaan_sehari_hari=pekerjaan_sehari_hari,
-                keterampilan_lapangan=keterampilan_lapangan,
-                pengalaman_lapangan=lapangan_bersih,
-                tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
-                nama_terang=nama_terang,
-                ringkasan_afiliasi=ringkasan_afiliasi,
-                foto=(st.session_state.berkas_foto.getvalue()
-                      if st.session_state.berkas_foto else None),
-                lampiran=susun_lampiran(),
-            )
-
-            with st.spinner("Menyusun dokumen CV beserta lampiran..."):
-                try:
-                    st.session_state.hasil_cv_pdf = generate_cv_pdf(data)
-                    st.session_state.hasil_cv_docx = generate_cv_docx(data)
-                    st.session_state.data_cv_terakhir = data
-                except Exception as e:
-                    st.session_state.hasil_cv_pdf = None
-                    st.session_state.hasil_cv_docx = None
-                    st.error(f"Terjadi kesalahan saat menyusun dokumen: {e}")
+        with st.spinner("Menyusun dokumen CV beserta lampiran..."):
+            try:
+                st.session_state.hasil_cv_pdf = generate_cv_pdf(data)
+                st.session_state.hasil_cv_docx = generate_cv_docx(data)
+                st.session_state.data_cv_terakhir = data
+                st.session_state.cv_catatan_kekurangan = catatan
+            except Exception as e:
+                st.session_state.hasil_cv_pdf = None
+                st.session_state.hasil_cv_docx = None
+                st.error(f"Terjadi kesalahan saat menyusun dokumen: {e}")
 
     # ---------------------------------------------------------------
     # 9. PRATINJAU DAN UNDUHAN
     # ---------------------------------------------------------------
     if st.session_state.hasil_cv_pdf:
+        with wadah_pengingat:
+            catatan = st.session_state.get("cv_catatan_kekurangan", [])
+            if catatan:
+                pesan = ", ".join(catatan)
+                st.info(
+                    f"Dokumen berhasil dibuat. Kolom berikut masih kosong dan "
+                    f"bisa dilengkapi kapan saja: {pesan}."
+                )
+
         st.success("Dokumen CV berhasil disusun.")
         data = st.session_state.data_cv_terakhir
         tampilkan_pratinjau_cv(data)
@@ -986,85 +1008,39 @@ def halaman_cv():
                 width="stretch",
             )
 
+def catat_kekurangan_cv(**k) -> list:
+    """Mencatat kolom penting yang masih kosong sebagai catatan informasional.
 
-def validasi_form_cv(**k) -> list:
-    """Memeriksa kelengkapan seluruh isian wajib pada form CV.
-
-    Mengembalikan daftar pesan galat. Daftar kosong berarti form lolos
-    validasi dan dokumen boleh dibuat.
+    Fungsi ini TIDAK PERNAH memblokir pembuatan dokumen — dokumen tetap
+    dihasilkan berapa pun kelengkapan datanya. Daftar yang dikembalikan
+    hanya ditampilkan sebagai pengingat halus setelah dokumen jadi, agar
+    pengguna tahu bagian mana yang masih bisa dilengkapi kemudian.
     """
-    galat = []
+    catatan = []
 
-    # --- Data pribadi ---
     if not k["nama"].strip():
-        galat.append("Nama Lengkap belum diisi.")
+        catatan.append("Nama Lengkap")
     if not k["tempat_lahir"].strip():
-        galat.append("Tempat Lahir belum diisi.")
+        catatan.append("Tempat Lahir")
     if not k["jenis_kelamin"]:
-        galat.append("Jenis Kelamin belum dipilih.")
+        catatan.append("Jenis Kelamin")
     if not k["agama"]:
-        galat.append("Agama belum dipilih.")
-    if not k["kewarganegaraan"].strip():
-        galat.append("Kewarganegaraan belum diisi.")
-    if not k["alamat"].strip():
-        galat.append("Alamat Lengkap belum diisi.")
-    if not k["telepon"].strip():
-        galat.append("Nomor Telepon belum diisi.")
+        catatan.append("Agama")
 
     email = k["email"].strip()
-    if not email:
-        galat.append("Email belum diisi.")
-    elif "@" not in email or "." not in email.split("@")[-1]:
-        galat.append("Format Email tidak valid.")
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        catatan.append("Format Email (periksa kembali)")
 
     nik = k["nomor_ktp"].strip()
-    if not nik:
-        galat.append("Nomor KTP (NIK) belum diisi.")
-    elif not (nik.isdigit() and len(nik) == 16):
-        galat.append("Nomor KTP (NIK) harus berupa 16 digit angka.")
+    if nik and not (nik.isdigit() and len(nik) == 16):
+        catatan.append("Nomor KTP (NIK) — harus 16 digit angka")
 
-    # --- Dokumen unggahan wajib ---
     if not st.session_state.berkas_foto:
-        galat.append("Pas Foto 3x4 belum diunggah.")
+        catatan.append("Pas Foto 3x4 (belum diunggah)")
     if not st.session_state.berkas_ktp:
-        galat.append("Scan KTP belum diunggah.")
-    if not k["lapangan"] and not st.session_state.berkas_lisensi:
-        galat.append("License Menyelam SCUBA belum diunggah.")
+        catatan.append("Scan KTP (belum diunggah)")
 
-    # --- Pendidikan (tidak wajib untuk Pembantu Lapangan) ---
-    if not k["lapangan"] and not k["pendidikan"]:
-        galat.append("Riwayat Pendidikan minimal 1 baris harus diisi.")
-
-    # --- Isian khusus per jenis CV ---
-    if k["penyelam"]:
-        if not k["lisensi_jenis"]:
-            galat.append("Jenis Lisensi selam belum dipilih.")
-        if not k["lisensi_nomor"].strip():
-            galat.append("Nomor Sertifikat selam belum diisi.")
-        if not k["lisensi_level"]:
-            galat.append("Level Sertifikasi selam belum dipilih.")
-        if not k["medis_nomor"].strip():
-            galat.append("Nomor Sertifikat Medis Selam belum diisi.")
-        if not k["medis_penerbit"].strip():
-            galat.append("Dokter/Klinik penerbit sertifikat medis belum diisi.")
-        if not k["keahlian_selam"]:
-            galat.append("Keahlian Khusus Penyelaman minimal pilih satu.")
-        if not k["pengalaman_selam"]:
-            galat.append("Pengalaman Penyelaman minimal 1 baris harus diisi.")
-    elif k["lapangan"]:
-        if not k["pekerjaan_sehari_hari"].strip():
-            galat.append("Pekerjaan Sehari-hari belum diisi.")
-        if not k["keterampilan_lapangan"]:
-            galat.append("Keterampilan Khusus Lapangan minimal pilih satu.")
-        if not k["pengalaman_lapangan"]:
-            galat.append("Pengalaman Kerja Lapangan minimal 1 baris harus diisi.")
-    else:
-        if not k["bidang_keahlian"]:
-            galat.append("Bidang Keahlian belum dipilih atau diisi.")
-        if not k["pengalaman_kerja"]:
-            galat.append("Pengalaman Kerja minimal 1 baris harus diisi.")
-
-    return galat
+    return catatan
 
 
 def tampilkan_pratinjau_cv(data: CVData):
@@ -1126,144 +1102,142 @@ def halaman_surat_tugas():
     st.info(
         "Surat otomatis menyertakan klausul pembebasan tugas mengajar dan "
         "larangan rangkap bayar sesuai Diktum KETUJUH SK Dekan. Surat dapat "
-        "diterbitkan untuk satu orang maupun satu tim sekaligus."
+        "diterbitkan untuk satu orang maupun satu tim sekaligus. Semua "
+        "kolom boleh dikosongkan bila belum ada datanya."
     )
 
-    wadah_galat = st.container()
+    wadah_pengingat = st.container()
 
-    st.markdown("### 📋 Identitas Surat")
-    kol1, kol2 = st.columns(2)
-    with kol1:
-        nomor_surat = st.text_input(
-            "Nomor Surat *", value="800/     /UN12.6/TU.00.00/2026",
-            key="st_nomor",
-            help="Contoh format: 800/1234/UN12.6/TU.00.00/2026",
-        )
-    with kol2:
-        unit_kerja = st.text_input(
-            "Unit Kerja",
-            value="Fakultas Perikanan dan Ilmu Kelautan, "
-                  "Universitas Sam Ratulangi",
-            key="st_unit_kerja",
-        )
+    with st.form("form_st", clear_on_submit=False):
+        st.markdown("### 📋 Identitas Surat")
+        kol1, kol2 = st.columns(2)
+        with kol1:
+            nomor_surat = st.text_input(
+                "Nomor Surat", value="800/     /UN12.6/TU.00.00/2026",
+                key="st_nomor",
+                help="Contoh format: 800/1234/UN12.6/TU.00.00/2026",
+            )
+        with kol2:
+            unit_kerja = st.text_input(
+                "Unit Kerja",
+                value="Fakultas Perikanan dan Ilmu Kelautan, "
+                      "Universitas Sam Ratulangi",
+                key="st_unit_kerja",
+            )
 
-    st.markdown("### 👥 Personil yang Ditugaskan")
-    st.caption(
-        "Isi satu baris untuk penugasan perorangan, atau beberapa baris "
-        "untuk penugasan tim."
-    )
-    st.session_state.personil_st = st.data_editor(
-        st.session_state.personil_st,
-        num_rows="dynamic", width="stretch", key="ed_personil_st",
-        column_config={
-            "Peran dalam Tim": st.column_config.SelectboxColumn(
-                "Peran dalam Tim", options=PERAN_TIM_PILIHAN,
-            ),
-        },
-    )
-
-    st.markdown("### 🗺️ Rincian Penugasan")
-    kolr1, kolr2 = st.columns(2)
-    with kolr1:
-        jenis_tugas = st.text_input(
-            "Jenis Tugas *", value="Survei Awal Ekologi dan Pemetaan Dasar",
-            key="st_jenis_tugas",
+        st.markdown("### 👥 Personil yang Ditugaskan")
+        st.caption(
+            "Isi satu baris untuk penugasan perorangan, atau beberapa baris "
+            "untuk penugasan tim."
         )
-    with kolr2:
-        lokasi = st.text_input(
-            "Lokasi Tugas *",
-            value="Pelabuhan Perikanan Samudera (PPS) Bitung, Sulawesi Utara",
-            key="st_lokasi",
+        st.session_state.personil_st = st.data_editor(
+            st.session_state.personil_st,
+            num_rows="dynamic", width="stretch", key="ed_personil_st",
+            column_config={
+                "Peran dalam Tim": st.column_config.SelectboxColumn(
+                    "Peran dalam Tim", options=PERAN_TIM_PILIHAN,
+                ),
+            },
         )
 
-    kolw1, kolw2, kolw3 = st.columns(3)
-    with kolw1:
-        tanggal_mulai = st.date_input(
-            "Tanggal Mulai *", value=date(2026, 9, 15),
-            format="DD/MM/YYYY", key="st_tanggal_mulai",
-        )
-    with kolw2:
-        tanggal_selesai = st.date_input(
-            "Tanggal Selesai *", value=date(2026, 9, 16),
-            format="DD/MM/YYYY", key="st_tanggal_selesai",
-        )
-    with kolw3:
-        jumlah_hari = st.number_input(
-            "Jumlah Hari Kerja *", min_value=1, max_value=60, value=2,
-            key="st_jumlah_hari",
-        )
+        st.markdown("### 🗺️ Rincian Penugasan")
+        kolr1, kolr2 = st.columns(2)
+        with kolr1:
+            jenis_tugas = st.text_input(
+                "Jenis Tugas", value="Survei Awal Ekologi dan Pemetaan Dasar",
+                key="st_jenis_tugas",
+            )
+        with kolr2:
+            lokasi = st.text_input(
+                "Lokasi Tugas",
+                value="Pelabuhan Perikanan Samudera (PPS) Bitung, Sulawesi Utara",
+                key="st_lokasi",
+            )
 
-    st.markdown("### ⚙️ Klausul dan Penanda Tangan")
-    kolk1, kolk2, kolk3 = st.columns(3)
-    with kolk1:
-        klaim_8_oj = st.checkbox(
-            "Aktifkan klausul 8 OJ/hari",
-            key="st_klaim_8oj",
-            help="Hanya berlaku bila terdapat personil berperan Pembantu Peneliti.",
-        )
-    with kolk2:
-        tempat_ttd = st.text_input("Tempat Tanda Tangan", value="Manado",
-                                   key="st_tempat_ttd")
-    with kolk3:
-        tanggal_ttd = st.date_input(
-            "Tanggal Surat", value=date.today(), format="DD/MM/YYYY",
-            key="st_tanggal_ttd",
-        )
+        kolw1, kolw2, kolw3 = st.columns(3)
+        with kolw1:
+            tanggal_mulai = st.date_input(
+                "Tanggal Mulai", value=date(2026, 9, 15),
+                format="DD/MM/YYYY", key="st_tanggal_mulai",
+            )
+        with kolw2:
+            tanggal_selesai = st.date_input(
+                "Tanggal Selesai", value=date(2026, 9, 16),
+                format="DD/MM/YYYY", key="st_tanggal_selesai",
+            )
+        with kolw3:
+            jumlah_hari = st.number_input(
+                "Jumlah Hari Kerja", min_value=1, max_value=60, value=2,
+                key="st_jumlah_hari",
+            )
 
-    st.markdown("---")
-    tekan = st.button(
-        "✉️ Generate Surat Tugas", type="primary", width="stretch",
-        key="tombol_generate_st",
-    )
+        st.markdown("### ⚙️ Klausul dan Penanda Tangan")
+        kolk1, kolk2, kolk3 = st.columns(3)
+        with kolk1:
+            klaim_8_oj = st.checkbox(
+                "Aktifkan klausul 8 OJ/hari",
+                key="st_klaim_8oj",
+                help="Hanya berlaku bila terdapat personil berperan Pembantu Peneliti.",
+            )
+        with kolk2:
+            tempat_ttd = st.text_input("Tempat Tanda Tangan", value="Manado",
+                                       key="st_tempat_ttd")
+        with kolk3:
+            tanggal_ttd = st.date_input(
+                "Tanggal Surat", value=date.today(), format="DD/MM/YYYY",
+                key="st_tanggal_ttd",
+            )
+
+        st.markdown("---")
+        tekan = st.form_submit_button(
+            "✉️ Generate Surat Tugas", type="primary", width="stretch",
+        )
 
     if tekan:
         personil = bersihkan_tabel(st.session_state.personil_st)
-        galat = []
 
+        # Catatan informasional saja — TIDAK memblokir pembuatan surat
+        catatan = []
         if not nomor_surat.strip() or "     " in nomor_surat:
-            galat.append("Nomor Surat belum diisi lengkap.")
+            catatan.append("Nomor Surat")
         if not personil:
-            galat.append("Daftar personil belum diisi (minimal 1 orang).")
-        else:
-            for i, orang in enumerate(personil, start=1):
-                if not orang.get("Nama", "").strip():
-                    galat.append(f"Nama personil pada baris {i} belum diisi.")
-                if not orang.get("Peran dalam Tim", "").strip():
-                    galat.append(f"Peran personil pada baris {i} belum dipilih.")
+            catatan.append("Daftar Personil")
         if not jenis_tugas.strip():
-            galat.append("Jenis Tugas belum diisi.")
+            catatan.append("Jenis Tugas")
         if not lokasi.strip():
-            galat.append("Lokasi Tugas belum diisi.")
+            catatan.append("Lokasi Tugas")
         if tanggal_selesai < tanggal_mulai:
-            galat.append("Tanggal Selesai tidak boleh lebih awal dari Tanggal Mulai.")
-
-        if galat:
-            with wadah_galat:
-                pesan = "\n".join(f"- {g}" for g in galat)
-                st.error(
-                    f"**Surat belum dapat dibuat. Lengkapi "
-                    f"{len(galat)} hal berikut:**\n\n{pesan}"
-                )
-            st.session_state.hasil_st_pdf = None
-            st.session_state.hasil_st_docx = None
-        else:
-            data_st = DataSuratTugas(
-                nomor_surat=nomor_surat, personil=personil,
-                unit_kerja=unit_kerja, jenis_tugas=jenis_tugas, lokasi=lokasi,
-                tanggal_mulai=tanggal_mulai, tanggal_selesai=tanggal_selesai,
-                jumlah_hari=int(jumlah_hari), klaim_8_oj=klaim_8_oj,
-                tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
+            catatan.append(
+                "Tanggal Selesai (lebih awal dari Tanggal Mulai — periksa kembali)"
             )
-            with st.spinner("Menyusun Surat Tugas..."):
-                try:
-                    st.session_state.hasil_st_pdf = generate_st_dinas_luar_pdf(data_st)
-                    st.session_state.hasil_st_docx = generate_st_dinas_luar(data_st)
-                except Exception as e:
-                    st.session_state.hasil_st_pdf = None
-                    st.session_state.hasil_st_docx = None
-                    st.error(f"Terjadi kesalahan saat menyusun surat: {e}")
+
+        data_st = DataSuratTugas(
+            nomor_surat=nomor_surat, personil=personil,
+            unit_kerja=unit_kerja, jenis_tugas=jenis_tugas, lokasi=lokasi,
+            tanggal_mulai=tanggal_mulai, tanggal_selesai=tanggal_selesai,
+            jumlah_hari=int(jumlah_hari), klaim_8_oj=klaim_8_oj,
+            tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
+        )
+        with st.spinner("Menyusun Surat Tugas..."):
+            try:
+                st.session_state.hasil_st_pdf = generate_st_dinas_luar_pdf(data_st)
+                st.session_state.hasil_st_docx = generate_st_dinas_luar(data_st)
+                st.session_state.st_catatan_kekurangan = catatan
+            except Exception as e:
+                st.session_state.hasil_st_pdf = None
+                st.session_state.hasil_st_docx = None
+                st.error(f"Terjadi kesalahan saat menyusun surat: {e}")
 
     if st.session_state.hasil_st_pdf:
+        with wadah_pengingat:
+            catatan = st.session_state.get("st_catatan_kekurangan", [])
+            if catatan:
+                pesan = ", ".join(catatan)
+                st.info(
+                    f"Surat berhasil dibuat. Kolom berikut sebaiknya "
+                    f"diperiksa kembali: {pesan}."
+                )
+
         st.success("Surat Tugas berhasil disusun.")
         personil = bersihkan_tabel(st.session_state.personil_st)
         nama_utama = personil[0].get("Nama", "Tim") if personil else "Tim"
@@ -1288,7 +1262,6 @@ def halaman_surat_tugas():
                       "wordprocessingml.document"),
                 width="stretch",
             )
-
 
 # =====================================================================
 # HALAMAN 3 — PANDUAN PENGGUNAAN
