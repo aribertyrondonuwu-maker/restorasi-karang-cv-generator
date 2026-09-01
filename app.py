@@ -499,6 +499,14 @@ def bersihkan_tabel(kerangka: pd.DataFrame) -> list:
 
 def halaman_cv():
     """Menampilkan halaman form dan pembuatan dokumen Curriculum Vitae."""
+    # Terapkan draf Ringkasan Keterkaitan yang tertunda (bila ada) SEBELUM
+    # widget kotak teksnya dibuat, supaya tidak melanggar batasan Streamlit
+    # yang melarang menulis session_state milik widget yang sudah dirender.
+    if "_draf_ringkasan_tertunda" in st.session_state:
+        st.session_state["cv_ringkasan_afiliasi"] = (
+            st.session_state.pop("_draf_ringkasan_tertunda")
+        )
+
     st.markdown("## 📄 Generator Curriculum Vitae")
     st.caption(
         "Semua kolom dapat dikosongkan bila belum ada datanya — dokumen "
@@ -904,6 +912,7 @@ def halaman_cv():
         )
 
         # Susun draf otomatis hanya bila kolom ringkasan masih kosong
+        perlu_perbarui_kotak_ringkasan = False
         if not ringkasan_afiliasi.strip():
             ringkasan_afiliasi = utils.buat_draf_afiliasi(
                 nama=nama, jenis_cv=jenis_cv,
@@ -919,7 +928,7 @@ def halaman_cv():
                 lisensi_level=lisensi_level if penyelam else "",
                 medis_masih_berlaku=medis_masih_berlaku,
             )
-            st.session_state.cv_ringkasan_afiliasi = ringkasan_afiliasi
+            perlu_perbarui_kotak_ringkasan = True
 
         # Catatan kekurangan bersifat informasional saja — TIDAK memblokir
         catatan = catat_kekurangan_cv(
@@ -970,6 +979,15 @@ def halaman_cv():
                 st.session_state.hasil_cv_pdf = None
                 st.session_state.hasil_cv_docx = None
                 st.error(f"Terjadi kesalahan saat menyusun dokumen: {e}")
+
+        # Kotak Ringkasan Keterkaitan tidak boleh ditulis langsung di sini
+        # (widget-nya sudah dirender di form pada eksekusi skrip yang sama).
+        # Simpan sebagai nilai tertunda lalu jalankan ulang skrip sekali —
+        # pada eksekusi berikutnya nilai ini diterapkan SEBELUM widget
+        # dibuat, sehingga aman dan langsung terlihat di kotak teks.
+        if perlu_perbarui_kotak_ringkasan:
+            st.session_state["_draf_ringkasan_tertunda"] = ringkasan_afiliasi
+            st.rerun()
 
     # ---------------------------------------------------------------
     # 9. PRATINJAU DAN UNDUHAN
