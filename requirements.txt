@@ -1,3 +1,25 @@
+# =====================================================================
+# requirements.txt
+# Web Generator CV & Surat Tugas Dinas Luar
+# Kegiatan Relokasi dan Replanting/Restorasi Terumbu Karang
+# PPS Kota Bitung — TA 2026 | FPIK UNSRAT
+# Python 3.10+
+# =====================================================================
+
+# --- Antarmuka web ---
 streamlit>=1.38.0
+
+# --- Pembuatan dokumen Word (.docx) ---
 python-docx>=1.1.0
+
+# --- Pembuatan dokumen PDF ---
+reportlab>=4.1.0
+
+# --- Penggabungan halaman lampiran ke PDF keluaran ---
+pypdf>=4.2.0
+
+# --- Pengolahan gambar (pas foto, KTP, lisensi selam) ---
 Pillow>=10.0.0
+
+# --- Tabel dinamis pada form (st.data_editor) ---
+pandas>=2.2.0
