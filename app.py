@@ -738,6 +738,8 @@ def halaman_cv():
         "disunting atau ditambahkan secara manual sebelum dokumen dibuat."
     )
 
+    pendidikan_pratinjau = bersihkan_tabel(st.session_state.pendidikan)
+    sertifikasi_pratinjau = bersihkan_tabel(st.session_state.sertifikasi)
     pengalaman_pratinjau = bersihkan_tabel(
         st.session_state.pengalaman_selam if penyelam
         else st.session_state.pengalaman_kerja
@@ -745,13 +747,23 @@ def halaman_cv():
     publikasi_pratinjau = (
         [] if penyelam else bersihkan_tabel(st.session_state.publikasi)
     )
+    medis_masih_berlaku = bool(
+        penyelam and medis_berlaku and medis_berlaku >= date.today()
+    )
 
     if st.button("🔄 Buat / Perbarui Draf Otomatis", key="cv_tombol_draf_afiliasi"):
         st.session_state.cv_ringkasan_afiliasi = utils.buat_draf_afiliasi(
-            nama=nama, jenis_cv=jenis_cv, bidang_keahlian=bidang_keahlian,
+            nama=nama, jenis_cv=jenis_cv,
+            peran_tim=peran_tim, peran_teknis=peran_teknis,
+            pendidikan=pendidikan_pratinjau,
+            bidang_keahlian=bidang_keahlian,
+            sertifikasi=sertifikasi_pratinjau,
             pengalaman=pengalaman_pratinjau, publikasi=publikasi_pratinjau,
             keahlian_selam=keahlian_selam,
             total_jam_selam=int(total_jam_selam) if penyelam else 0,
+            lisensi_jenis=lisensi_jenis if penyelam else "",
+            lisensi_level=lisensi_level if penyelam else "",
+            medis_masih_berlaku=medis_masih_berlaku,
         )
 
     ringkasan_afiliasi = st.text_area(

@@ -244,44 +244,92 @@ def _mengandung_kata_kunci(teks: str) -> bool:
     return any(kata in teks for kata in _KATA_KUNCI_RELEVAN)
 
 
+_URUTAN_JENJANG = {
+    "SMA/SMK": 0, "D3": 1, "D4": 2, "S1": 3, "S2": 4, "S3": 5,
+}
+
+
+def _pendidikan_tertinggi(pendidikan: list) -> Optional[dict]:
+    """Mengembalikan baris pendidikan dengan jenjang tertinggi dari daftar."""
+    valid = [b for b in pendidikan if str(b.get("Jenjang", "")).strip()]
+    if not valid:
+        return None
+    return max(
+        valid,
+        key=lambda b: _URUTAN_JENJANG.get(str(b.get("Jenjang", "")).strip(), -1),
+    )
+
+
 def buat_draf_afiliasi(nama: str, jenis_cv: str,
+                       peran_tim: str = "", peran_teknis: str = "",
+                       pendidikan: Optional[list] = None,
                        bidang_keahlian: Optional[list] = None,
+                       sertifikasi: Optional[list] = None,
                        pengalaman: Optional[list] = None,
                        publikasi: Optional[list] = None,
                        keahlian_selam: Optional[list] = None,
-                       total_jam_selam: int = 0) -> str:
+                       total_jam_selam: int = 0,
+                       lisensi_jenis: str = "", lisensi_level: str = "",
+                       medis_masih_berlaku: bool = False) -> str:
     """Menyusun draf ringkasan keterkaitan seseorang dengan kegiatan restorasi
-    terumbu karang, berdasarkan data pengalaman kerja/penyelaman, publikasi,
-    dan keahlian yang telah diisi pada form.
+    terumbu karang, berdasarkan seluruh data yang relevan pada form: peran
+    dalam tim, pendidikan, keahlian, sertifikasi, pengalaman, publikasi, dan
+    (khusus penyelam) lisensi selam serta status sertifikat medis.
 
     Hasilnya adalah draf awal yang ditujukan untuk disunting lebih lanjut,
     bukan teks final yang siap pakai tanpa pemeriksaan.
     """
+    pendidikan = pendidikan or []
     bidang_keahlian = bidang_keahlian or []
+    sertifikasi = sertifikasi or []
     pengalaman = pengalaman or []
     publikasi = publikasi or []
     keahlian_selam = keahlian_selam or []
     nama_singkat = (nama or "").strip() or "Yang bersangkutan"
 
-    if not (pengalaman or publikasi or bidang_keahlian or keahlian_selam):
+    ada_data = any([
+        peran_tim, pendidikan, bidang_keahlian, sertifikasi, pengalaman,
+        publikasi, keahlian_selam, lisensi_jenis,
+    ])
+    if not ada_data:
         return (
-            "Draf belum dapat disusun karena data pengalaman, keahlian, "
-            "atau penelitian pada form di atas belum diisi. Lengkapi data "
-            "tersebut terlebih dahulu, lalu tekan tombol \"Buat / Perbarui "
-            "Draf Otomatis\"."
+            "Draf belum dapat disusun karena data peran, pendidikan, "
+            "keahlian, sertifikasi, atau pengalaman pada form di atas "
+            "belum diisi. Lengkapi data tersebut terlebih dahulu, lalu "
+            "tekan tombol \"Buat / Perbarui Draf Otomatis\"."
         )
 
     kalimat = []
 
-    if jenis_cv == "Tenaga Spesialis Penyelaman":
-        lokasi_relevan = []
-        for b in pengalaman:
-            gabungan = " ".join(str(v) for v in b.values())
-            if _mengandung_kata_kunci(gabungan):
-                lokasi = str(b.get("Lokasi Penyelaman", "")).strip()
-                if lokasi and lokasi not in lokasi_relevan:
-                    lokasi_relevan.append(lokasi)
+    # --- 1. Peran dalam tim ---
+    if peran_tim.strip():
+        teks_peran = f"{nama_singkat} berperan sebagai {peran_tim}"
+        if peran_teknis.strip():
+            teks_peran += f" dengan tugas teknis sebagai {peran_teknis}"
+        kalimat.append(teks_peran + " pada kegiatan ini.")
 
+    # --- 2. Pendidikan tertinggi ---
+    pend_tertinggi = _pendidikan_tertinggi(pendidikan)
+    if pend_tertinggi:
+        jenjang = pend_tertinggi.get("Jenjang", "").strip()
+        jurusan = pend_tertinggi.get("Jurusan", "").strip()
+        univ = pend_tertinggi.get("Universitas", "").strip()
+        teks_pend = f"Pendidikan terakhir yang ditempuh adalah {jenjang}"
+        if jurusan:
+            teks_pend += f" {jurusan}"
+        if univ:
+            teks_pend += f" di {univ}"
+        kalimat.append(teks_pend + ".")
+
+    if jenis_cv == "Tenaga Spesialis Penyelaman":
+        # --- 3. Lisensi selam ---
+        if lisensi_jenis.strip():
+            teks_lisensi = f"Bersertifikat penyelam {lisensi_jenis}"
+            if lisensi_level.strip():
+                teks_lisensi += f" pada level {lisensi_level}"
+            kalimat.append(teks_lisensi + ".")
+
+        # --- 4. Jam selam dan keahlian khusus ---
         if total_jam_selam:
             teks_jam = (
                 f"{nama_singkat} memiliki total {total_jam_selam} jam "
@@ -296,6 +344,23 @@ def buat_draf_afiliasi(nama: str, jenis_cv: str,
                 f"{', '.join(keahlian_selam)}."
             )
 
+        # --- 5. Status sertifikat medis ---
+        if medis_masih_berlaku:
+            kalimat.append(
+                "Memiliki sertifikat medis selam (fit to dive) yang masih "
+                "berlaku, sehingga secara medis dinyatakan layak untuk "
+                "melaksanakan kegiatan penyelaman lapangan."
+            )
+
+        # --- 6. Pengalaman penyelaman relevan ---
+        lokasi_relevan = []
+        for b in pengalaman:
+            gabungan = " ".join(str(v) for v in b.values())
+            if _mengandung_kata_kunci(gabungan):
+                lokasi = str(b.get("Lokasi Penyelaman", "")).strip()
+                if lokasi and lokasi not in lokasi_relevan:
+                    lokasi_relevan.append(lokasi)
+
         if lokasi_relevan:
             kalimat.append(
                 "Pengalaman penyelaman yang relevan dengan kegiatan "
@@ -308,12 +373,39 @@ def buat_draf_afiliasi(nama: str, jenis_cv: str,
                 "berbagai lokasi dan jenis kegiatan."
             )
 
+        # --- 7. Sertifikasi kompetensi tambahan ---
+        if sertifikasi:
+            nama_relevan = [
+                s.get("Nama Sertifikat", "").strip() for s in sertifikasi
+                if _mengandung_kata_kunci(s.get("Nama Sertifikat", ""))
+                and str(s.get("Nama Sertifikat", "")).strip()
+            ]
+            if nama_relevan:
+                kalimat.append(
+                    "Sertifikasi kompetensi tambahan yang relevan yang "
+                    f"dimiliki meliputi {', '.join(nama_relevan)}."
+                )
+            else:
+                kalimat.append(
+                    f"Yang bersangkutan juga memiliki {len(sertifikasi)} "
+                    "sertifikasi kompetensi lainnya yang mendukung "
+                    "pelaksanaan tugas."
+                )
+
         kalimat.append(
             "Dengan latar belakang tersebut, yang bersangkutan memiliki "
             "kompetensi teknis yang relevan untuk mendukung pelaksanaan "
             f"kegiatan {NAMA_KEGIATAN.title()}."
         )
     else:
+        # --- 3. Bidang keahlian ---
+        if bidang_keahlian:
+            kalimat.append(
+                f"{nama_singkat} memiliki latar belakang keahlian pada "
+                f"bidang {', '.join(bidang_keahlian)}."
+            )
+
+        # --- 4. Pengalaman kerja relevan ---
         lokasi_relevan = []
         for b in pengalaman:
             gabungan = " ".join(str(v) for v in b.values())
@@ -321,18 +413,6 @@ def buat_draf_afiliasi(nama: str, jenis_cv: str,
                 lokasi = str(b.get("Lokasi", "")).strip()
                 if lokasi and lokasi not in lokasi_relevan:
                     lokasi_relevan.append(lokasi)
-
-        publikasi_relevan = [
-            p.get("Judul", "").strip() for p in publikasi
-            if _mengandung_kata_kunci(p.get("Judul", ""))
-            and str(p.get("Judul", "")).strip()
-        ]
-
-        if bidang_keahlian:
-            kalimat.append(
-                f"{nama_singkat} memiliki latar belakang keahlian pada "
-                f"bidang {', '.join(bidang_keahlian)}."
-            )
 
         if lokasi_relevan:
             kalimat.append(
@@ -346,6 +426,31 @@ def buat_draf_afiliasi(nama: str, jenis_cv: str,
                 "berbagai proyek dan instansi."
             )
 
+        # --- 5. Sertifikasi kompetensi ---
+        if sertifikasi:
+            nama_relevan = [
+                s.get("Nama Sertifikat", "").strip() for s in sertifikasi
+                if _mengandung_kata_kunci(s.get("Nama Sertifikat", ""))
+                and str(s.get("Nama Sertifikat", "")).strip()
+            ]
+            if nama_relevan:
+                kalimat.append(
+                    "Sertifikasi kompetensi yang relevan yang dimiliki "
+                    f"meliputi {', '.join(nama_relevan)}."
+                )
+            else:
+                kalimat.append(
+                    f"Yang bersangkutan juga memiliki {len(sertifikasi)} "
+                    "sertifikasi kompetensi lainnya yang mendukung "
+                    "pelaksanaan tugas."
+                )
+
+        # --- 6. Publikasi ilmiah relevan ---
+        publikasi_relevan = [
+            p.get("Judul", "").strip() for p in publikasi
+            if _mengandung_kata_kunci(p.get("Judul", ""))
+            and str(p.get("Judul", "")).strip()
+        ]
         if publikasi_relevan:
             kalimat.append(
                 f"Yang bersangkutan turut mempublikasikan "
