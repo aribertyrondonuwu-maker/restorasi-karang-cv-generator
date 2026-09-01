@@ -126,6 +126,55 @@ st.markdown(GAYA_APLIKASI, unsafe_allow_html=True)
 
 
 # =====================================================================
+# GERBANG KATA SANDI
+# =====================================================================
+
+def periksa_kata_sandi() -> bool:
+    """Menampilkan formulir kata sandi dan menahan akses sampai lolos.
+
+    Kata sandi diambil dari Streamlit Secrets (kunci APP_PASSWORD) agar
+    tidak tertulis langsung di kode sumber yang bersifat publik. Apabila
+    secrets belum diatur, gerbang ini dilewati secara otomatis supaya
+    aplikasi tetap bisa dijalankan saat pengembangan lokal.
+    """
+    kata_sandi_baku = st.secrets.get("APP_PASSWORD", None) if hasattr(
+        st, "secrets") else None
+
+    # Tidak ada kata sandi yang diatur -> lewati gerbang (mode pengembangan)
+    if not kata_sandi_baku:
+        return True
+
+    if st.session_state.get("sudah_login", False):
+        return True
+
+    st.markdown(
+        "<div style='max-width:420px;margin:80px auto 0;text-align:center;'>"
+        "<h3 style='color:#1B3F6B;'>🌊 Akses Terbatas</h3>"
+        "<p style='color:#666;font-size:14px;'>Masukkan kata sandi untuk "
+        "membuka Generator Dokumen Tim Pelaksana Swakelola.</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    kol_kiri, kol_tengah, kol_kanan = st.columns([1, 1.2, 1])
+    with kol_tengah:
+        masukan = st.text_input(
+            "Kata Sandi", type="password", key="masukan_kata_sandi",
+            label_visibility="collapsed", placeholder="Kata sandi...",
+        )
+        tekan = st.button("Masuk", type="primary", width="stretch")
+
+        if tekan:
+            if masukan == kata_sandi_baku:
+                st.session_state.sudah_login = True
+                st.rerun()
+            else:
+                st.error("Kata sandi salah. Silakan coba lagi.")
+
+    return False
+
+
+# =====================================================================
 # INISIALISASI SESSION STATE
 # =====================================================================
 
@@ -192,6 +241,7 @@ def siapkan_session_state():
         "hasil_st_pdf": None,
         "hasil_st_docx": None,
         "data_cv_terakhir": None,
+        "cv_ringkasan_afiliasi": "",
     }
     for kunci, nilai in berkas_awal.items():
         if kunci not in st.session_state:
@@ -518,7 +568,7 @@ def halaman_cv():
     st.caption("Klik baris terakhir untuk menambah data. Minimal 1 baris wajib diisi.")
     st.session_state.pendidikan = st.data_editor(
         st.session_state.pendidikan,
-        num_rows="dynamic", use_container_width=True, key="ed_pendidikan",
+        num_rows="dynamic", width="stretch", key="ed_pendidikan",
         column_config={
             "Jenjang": st.column_config.SelectboxColumn(
                 "Jenjang", options=["SMA/SMK", "D3", "D4", "S1", "S2", "S3"],
@@ -600,7 +650,7 @@ def halaman_cv():
         st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
         st.session_state.pengalaman_selam = st.data_editor(
             st.session_state.pengalaman_selam,
-            num_rows="dynamic", use_container_width=True,
+            num_rows="dynamic", width="stretch",
             key="ed_pengalaman_selam",
             column_config={
                 "Tahun": st.column_config.TextColumn("Tahun", width="small"),
@@ -646,7 +696,7 @@ def halaman_cv():
     st.markdown(f"### {judul_sertifikasi}")
     st.session_state.sertifikasi = st.data_editor(
         st.session_state.sertifikasi,
-        num_rows="dynamic", use_container_width=True, key="ed_sertifikasi",
+        num_rows="dynamic", width="stretch", key="ed_sertifikasi",
         column_config={
             "Tahun": st.column_config.TextColumn("Tahun", width="small"),
         },
@@ -660,7 +710,7 @@ def halaman_cv():
         st.caption("Minimal 1 baris terisi. Tersedia 5 baris kosong.")
         st.session_state.pengalaman_kerja = st.data_editor(
             st.session_state.pengalaman_kerja,
-            num_rows="dynamic", use_container_width=True,
+            num_rows="dynamic", width="stretch",
             key="ed_pengalaman_kerja",
             column_config={
                 "Tahun": st.column_config.TextColumn("Tahun", width="small"),
@@ -670,12 +720,50 @@ def halaman_cv():
         st.markdown("### 📚 Publikasi Ilmiah (opsional)")
         st.session_state.publikasi = st.data_editor(
             st.session_state.publikasi,
-            num_rows="dynamic", use_container_width=True, key="ed_publikasi",
+            num_rows="dynamic", width="stretch", key="ed_publikasi",
             column_config={
                 "Tahun": st.column_config.TextColumn("Tahun", width="small"),
             },
         )
         publikasi_bersih = bersihkan_tabel(st.session_state.publikasi)
+
+    # ---------------------------------------------------------------
+    # 6b. RINGKASAN KETERKAITAN DENGAN KEGIATAN
+    # ---------------------------------------------------------------
+    st.markdown("### 🔗 Ringkasan Keterkaitan dengan Kegiatan")
+    st.caption(
+        "Ringkasan berikut menjelaskan keterkaitan riwayat pengalaman, "
+        "penelitian, dan keahlian di atas dengan kegiatan restorasi terumbu "
+        "karang. Disusun otomatis dari data yang sudah diisi, dan dapat "
+        "disunting atau ditambahkan secara manual sebelum dokumen dibuat."
+    )
+
+    pengalaman_pratinjau = bersihkan_tabel(
+        st.session_state.pengalaman_selam if penyelam
+        else st.session_state.pengalaman_kerja
+    )
+    publikasi_pratinjau = (
+        [] if penyelam else bersihkan_tabel(st.session_state.publikasi)
+    )
+
+    if st.button("🔄 Buat / Perbarui Draf Otomatis", key="cv_tombol_draf_afiliasi"):
+        st.session_state.cv_ringkasan_afiliasi = utils.buat_draf_afiliasi(
+            nama=nama, jenis_cv=jenis_cv, bidang_keahlian=bidang_keahlian,
+            pengalaman=pengalaman_pratinjau, publikasi=publikasi_pratinjau,
+            keahlian_selam=keahlian_selam,
+            total_jam_selam=int(total_jam_selam) if penyelam else 0,
+        )
+
+    ringkasan_afiliasi = st.text_area(
+        "Ringkasan Keterkaitan dengan Kegiatan",
+        key="cv_ringkasan_afiliasi", height=140,
+        label_visibility="collapsed",
+        placeholder=(
+            "Klik tombol di atas untuk membuat draf otomatis, lalu sunting "
+            "atau tambahkan sesuai kebutuhan. Boleh juga ditulis manual "
+            "sepenuhnya tanpa memakai draf otomatis."
+        ),
+    )
 
     # ---------------------------------------------------------------
     # 7. PERNYATAAN DAN TANDA TANGAN
@@ -704,7 +792,7 @@ def halaman_cv():
     # ---------------------------------------------------------------
     st.markdown("---")
     tekan_generate = st.button(
-        "⚡ Generate CV", type="primary", use_container_width=True,
+        "⚡ Generate CV", type="primary", width="stretch",
         key="tombol_generate_cv",
     )
 
@@ -760,6 +848,7 @@ def halaman_cv():
                 pengalaman_selam=selam_bersih,
                 tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
                 nama_terang=nama_terang,
+                ringkasan_afiliasi=ringkasan_afiliasi,
                 foto=(st.session_state.berkas_foto.getvalue()
                       if st.session_state.berkas_foto else None),
                 lampiran=susun_lampiran(),
@@ -791,7 +880,7 @@ def halaman_cv():
                 data=st.session_state.hasil_cv_pdf,
                 file_name=f"{nama_unduh}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
             )
         with kolu2:
             st.download_button(
@@ -800,7 +889,7 @@ def halaman_cv():
                 file_name=f"{nama_unduh}.docx",
                 mime=("application/vnd.openxmlformats-officedocument."
                       "wordprocessingml.document"),
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -918,6 +1007,10 @@ def tampilkan_pratinjau_cv(data: CVData):
         else:
             st.caption("Tidak ada lampiran.")
 
+        if data.ringkasan_afiliasi.strip():
+            st.markdown("**Ringkasan Keterkaitan dengan Kegiatan:**")
+            st.caption(data.ringkasan_afiliasi)
+
 
 # =====================================================================
 # HALAMAN 2 — GENERATOR SURAT TUGAS DINAS LUAR
@@ -957,7 +1050,7 @@ def halaman_surat_tugas():
     )
     st.session_state.personil_st = st.data_editor(
         st.session_state.personil_st,
-        num_rows="dynamic", use_container_width=True, key="ed_personil_st",
+        num_rows="dynamic", width="stretch", key="ed_personil_st",
         column_config={
             "Peran dalam Tim": st.column_config.SelectboxColumn(
                 "Peran dalam Tim", options=PERAN_TIM_PILIHAN,
@@ -1015,7 +1108,7 @@ def halaman_surat_tugas():
 
     st.markdown("---")
     tekan = st.button(
-        "✉️ Generate Surat Tugas", type="primary", use_container_width=True,
+        "✉️ Generate Surat Tugas", type="primary", width="stretch",
         key="tombol_generate_st",
     )
 
@@ -1080,7 +1173,7 @@ def halaman_surat_tugas():
                 data=st.session_state.hasil_st_pdf,
                 file_name=f"{nama_unduh}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
             )
         with kolu2:
             st.download_button(
@@ -1089,7 +1182,7 @@ def halaman_surat_tugas():
                 file_name=f"{nama_unduh}.docx",
                 mime=("application/vnd.openxmlformats-officedocument."
                       "wordprocessingml.document"),
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -1150,6 +1243,9 @@ def halaman_panduan():
 
 def main():
     """Menjalankan aplikasi: menampilkan kepala, sidebar, dan halaman aktif."""
+    if not periksa_kata_sandi():
+        st.stop()
+
     tampilkan_kepala()
 
     with st.sidebar:
@@ -1176,10 +1272,16 @@ def main():
             st.markdown(f"{'✅' if ada else '⬜'} {label}")
 
         st.markdown("---")
-        if st.button("🔄 Reset Seluruh Form", use_container_width=True):
+        if st.button("🔄 Reset Seluruh Form", width="stretch"):
             for kunci in list(st.session_state.keys()):
                 del st.session_state[kunci]
             st.rerun()
+
+        if hasattr(st, "secrets") and st.secrets.get("APP_PASSWORD", None):
+            st.markdown("---")
+            if st.button("🔒 Keluar", width="stretch"):
+                st.session_state.sudah_login = False
+                st.rerun()
 
         st.markdown("---")
         st.caption(

@@ -147,6 +147,9 @@ class CVData:
     tanggal_ttd: Optional[date] = None
     nama_terang: str = ""
 
+    # --- Ringkasan keterkaitan dengan kegiatan (dapat diisi otomatis/manual) ---
+    ringkasan_afiliasi: str = ""
+
     # --- Berkas ---
     foto: Optional[bytes] = None
     lampiran: List[Lampiran] = field(default_factory=list)
@@ -643,6 +646,10 @@ def _pdf_utama(data: CVData) -> bytes:
     else:
         elemen += _isi_pdf_tenaga_ahli(g, data)
 
+    if data.ringkasan_afiliasi.strip():
+        elemen.append(_judul_seksi_pdf(g, "Ringkasan Keterkaitan dengan Kegiatan"))
+        elemen.append(Paragraph(data.ringkasan_afiliasi, g["isi"]))
+
     elemen += _blok_ttd_pdf(g, data)
 
     dokumen.build(
@@ -1099,6 +1106,13 @@ def generate_cv_docx(data: CVData) -> bytes:
         _isi_docx_penyelam(dok, data)
     else:
         _isi_docx_tenaga_ahli(dok, data)
+
+    if data.ringkasan_afiliasi.strip():
+        _judul_seksi_docx(dok, "Ringkasan Keterkaitan dengan Kegiatan")
+        p_ringkasan = dok.add_paragraph()
+        p_ringkasan.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p_ringkasan.paragraph_format.line_spacing = 1.5
+        _tulis(p_ringkasan, data.ringkasan_afiliasi)
 
     _blok_ttd_docx(dok, data)
 
