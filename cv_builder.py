@@ -76,6 +76,10 @@ JENIS_TENAGA_AHLI = "Tenaga Ahli"
 JENIS_PEMBANTU_PENELITI = "Pembantu Peneliti"
 JENIS_PENYELAM = "Tenaga Spesialis Penyelaman"
 JENIS_PEMBANTU_LAPANGAN = "Pembantu Lapangan"
+JENIS_DSO = "Jasa Diving Safety Officer / K3 Penyelaman"
+JENIS_EDITOR_VIDEO = "Jasa Editing Video"
+JENIS_DRONE = "Jasa Pemetaan Drone"
+JENIS_ANALIS_DATA = "Jasa Analisis Data"
 
 
 # =====================================================================
@@ -169,12 +173,17 @@ class CVData:
         return aman(self.tempat_lahir or tgl)
 
     def adalah_penyelam(self) -> bool:
-        """Mengembalikan True bila dokumen berjenis Spesialis Penyelaman."""
-        return self.jenis_cv == JENIS_PENYELAM
+        """Mengembalikan True bila dokumen memerlukan struktur field selam
+        (Tenaga Spesialis Penyelaman maupun Jasa Diving Safety Officer)."""
+        return self.jenis_cv in (JENIS_PENYELAM, JENIS_DSO)
 
     def adalah_lapangan(self) -> bool:
-        """Mengembalikan True bila dokumen berjenis Pembantu Lapangan."""
-        return self.jenis_cv == JENIS_PEMBANTU_LAPANGAN
+        """Mengembalikan True bila dokumen memakai struktur form sederhana
+        (Pembantu Lapangan maupun jasa spesialis non-selam lainnya)."""
+        return self.jenis_cv in (
+            JENIS_PEMBANTU_LAPANGAN, JENIS_EDITOR_VIDEO, JENIS_DRONE,
+            JENIS_ANALIS_DATA,
+        )
 
 
 PERNYATAAN_BAKU = (
@@ -592,24 +601,32 @@ def _isi_pdf_penyelam(g: Dict[str, ParagraphStyle], data: CVData) -> List:
     return e
 
 
+def _judul_lapangan(data: CVData) -> tuple:
+    """Menentukan judul bagian Keterampilan & Pengalaman sesuai jenis jasa."""
+    if data.jenis_cv == JENIS_PEMBANTU_LAPANGAN:
+        return "Keterampilan Khusus Lapangan", "Pengalaman Kerja Lapangan"
+    return "Keahlian dan Peralatan yang Dikuasai", "Pengalaman Kerja / Proyek Relevan"
+
+
 def _isi_pdf_lapangan(g: Dict[str, ParagraphStyle], data: CVData) -> List:
-    """Menyusun bagian isi CV untuk jenis Pembantu Lapangan."""
+    """Menyusun bagian isi CV untuk jenis Pembantu Lapangan / jasa spesialis."""
     e = []
+    judul_keterampilan, judul_pengalaman = _judul_lapangan(data)
 
     # A. Data pribadi
     e.append(_judul_seksi_pdf(g, "A. Data Pribadi"))
     e.append(_tabel_label_pdf(g, _baris_data_pribadi(data)))
 
-    # B. Keterampilan khusus lapangan
-    e.append(_judul_seksi_pdf(g, "B. Keterampilan Khusus Lapangan"))
+    # B. Keterampilan / peralatan
+    e.append(_judul_seksi_pdf(g, f"B. {judul_keterampilan}"))
     if data.keterampilan_lapangan:
         for k in data.keterampilan_lapangan:
             e.append(Paragraph(f"&#9642; {k}", g["isi"]))
     else:
         e.append(Paragraph("Belum diisi.", g["isi"]))
 
-    # C. Pengalaman kerja lapangan
-    e.append(_judul_seksi_pdf(g, "C. Pengalaman Kerja Lapangan"))
+    # C. Pengalaman kerja / proyek
+    e.append(_judul_seksi_pdf(g, f"C. {judul_pengalaman}"))
     baris = []
     for i, b in enumerate(data.pengalaman_lapangan, start=1):
         baris.append([
@@ -1360,11 +1377,13 @@ def _isi_docx_penyelam(dok: Document, data: CVData):
 
 
 def _isi_docx_lapangan(dok: Document, data: CVData):
-    """Menyusun bagian isi DOCX untuk jenis Pembantu Lapangan."""
+    """Menyusun bagian isi DOCX untuk jenis Pembantu Lapangan / jasa spesialis."""
+    judul_keterampilan, judul_pengalaman = _judul_lapangan(data)
+
     _judul_seksi_docx(dok, "A. Data Pribadi")
     _tabel_label_docx(dok, _baris_data_pribadi(data))
 
-    _judul_seksi_docx(dok, "B. Keterampilan Khusus Lapangan")
+    _judul_seksi_docx(dok, f"B. {judul_keterampilan}")
     if data.keterampilan_lapangan:
         for k in data.keterampilan_lapangan:
             pk = dok.add_paragraph()
@@ -1374,7 +1393,7 @@ def _isi_docx_lapangan(dok: Document, data: CVData):
     else:
         _tulis(dok.add_paragraph(), "Belum diisi.")
 
-    _judul_seksi_docx(dok, "C. Pengalaman Kerja Lapangan")
+    _judul_seksi_docx(dok, f"C. {judul_pengalaman}")
     baris = []
     for i, b in enumerate(data.pengalaman_lapangan, start=1):
         baris.append([

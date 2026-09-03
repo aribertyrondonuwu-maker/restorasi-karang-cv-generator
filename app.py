@@ -23,7 +23,8 @@ from utils import (
 from cv_builder import (
     CVData, Lampiran, generate_cv_pdf, generate_cv_docx,
     JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI, JENIS_PENYELAM,
-    JENIS_PEMBANTU_LAPANGAN,
+    JENIS_PEMBANTU_LAPANGAN, JENIS_DSO, JENIS_EDITOR_VIDEO, JENIS_DRONE,
+    JENIS_ANALIS_DATA,
 )
 from st_dinas_luar_builder import (
     DataSuratTugas, generate_st_dinas_luar, generate_st_dinas_luar_pdf,
@@ -219,6 +220,10 @@ KEAHLIAN_SELAM_PILIHAN = [
     "Transplantasi Karang", "Reef Survey", "Underwater Photography",
     "Videografi Bawah Air", "ROV Assist",
     "Penandaan dan Pemetaan Terumbu Karang", "Pengambilan Sampel Biologi",
+    "Dive Safety Officer / Pengawas Keselamatan Selam",
+    "Penyusunan Rencana Keselamatan Penyelaman (Dive Safety Plan)",
+    "P3K Selam & Penanganan Kecelakaan Dekompresi",
+    "Pengawasan Kompresor dan Tabung Selam",
 ]
 
 KETERAMPILAN_LAPANGAN_PILIHAN = [
@@ -228,9 +233,37 @@ KETERAMPILAN_LAPANGAN_PILIHAN = [
     "Perawatan dan Perbaikan Peralatan Lapangan",
 ]
 
+KETERAMPILAN_EDITOR_VIDEO_PILIHAN = [
+    "Adobe Premiere Pro", "DaVinci Resolve", "Adobe After Effects",
+    "Color Grading Bawah Air", "Videografi Bawah Air (Underwater Videography)",
+    "Motion Graphics & Subtitle",
+]
+
+KETERAMPILAN_DRONE_PILIHAN = [
+    "Piloting Drone Survei (DJI Phantom/Mavic, dll)",
+    "Pengolahan Ortomosaik (Pix4D/Agisoft Metashape)",
+    "GIS (QGIS/ArcGIS)", "Pemetaan Fotogrametri",
+    "Perizinan dan Keselamatan Penerbangan Drone",
+]
+
+KETERAMPILAN_ANALIS_DATA_PILIHAN = [
+    "Analisis Statistik (R/Python/SPSS)", "Visualisasi Data (Excel/Tableau/Power BI)",
+    "Pengelolaan Basis Data Ekologi", "Pemodelan Spasial",
+    "Penyusunan Laporan Ilmiah dan Publikasi Data",
+]
+
+# Peta jenis jasa (form sederhana) -> daftar pilihan keahlian/peralatan
+PERALATAN_JASA_PILIHAN = {
+    JENIS_EDITOR_VIDEO: KETERAMPILAN_EDITOR_VIDEO_PILIHAN,
+    JENIS_DRONE: KETERAMPILAN_DRONE_PILIHAN,
+    JENIS_ANALIS_DATA: KETERAMPILAN_ANALIS_DATA_PILIHAN,
+}
+
 PERAN_TIM_PILIHAN = [
     "Ketua Tim Pelaksana", "Anggota Tim Pelaksana", "Pembantu Peneliti",
     "Penyelam Bersertifikat", "Pembantu Lapangan",
+    "Jasa Diving Safety Officer / K3 Penyelaman", "Jasa Editing Video",
+    "Jasa Pemetaan Drone", "Jasa Analisis Data",
 ]
 
 BULAN_PILIHAN = [
@@ -513,23 +546,33 @@ def halaman_cv():
         "tetap bisa dibuat dan dilengkapi kemudian."
     )
 
-    jenis_cv = st.radio(
+    jenis_cv = st.selectbox(
         "Jenis CV yang akan dibuat",
         [JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI, JENIS_PENYELAM,
-         JENIS_PEMBANTU_LAPANGAN],
-        horizontal=True,
+         JENIS_DSO, JENIS_PEMBANTU_LAPANGAN, JENIS_EDITOR_VIDEO,
+         JENIS_DRONE, JENIS_ANALIS_DATA],
         key="cv_jenis",
         help=(
-            "Tenaga Ahli & Pembantu Peneliti menekankan pendidikan, "
-            "publikasi, dan pengalaman kerja (field sama, beda skema "
-            "honor). Tenaga Spesialis Penyelaman menekankan lisensi selam "
-            "dan jam selam. Pembantu Lapangan memakai form sederhana untuk "
-            "tenaga pendukung harian (nelayan/masyarakat lokal)."
+            "Tenaga Ahli & Pembantu Peneliti: pendidikan, publikasi, "
+            "pengalaman kerja (field sama, beda skema honor). Tenaga "
+            "Spesialis Penyelaman & Jasa Diving Safety Officer: lisensi "
+            "selam dan jam selam. Pembantu Lapangan & jasa spesialis "
+            "lainnya (Editing Video/Pemetaan Drone/Analisis Data): form "
+            "sederhana berisi keahlian/peralatan dan pengalaman proyek."
         ),
     )
-    penyelam = jenis_cv == JENIS_PENYELAM
-    lapangan = jenis_cv == JENIS_PEMBANTU_LAPANGAN
+    penyelam = jenis_cv in (JENIS_PENYELAM, JENIS_DSO)
+    lapangan = jenis_cv in (
+        JENIS_PEMBANTU_LAPANGAN, JENIS_EDITOR_VIDEO, JENIS_DRONE,
+        JENIS_ANALIS_DATA,
+    )
     ahli_atau_peneliti = jenis_cv in (JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI)
+    # Hanya Penyelam & DSO yang benar-benar wajib punya lisensi selam
+    perlu_lisensi_selam = jenis_cv in (JENIS_PENYELAM, JENIS_DSO)
+    # Daftar pilihan keahlian/peralatan menyesuaikan jenis jasa lapangan
+    pilihan_keterampilan_lapangan = PERALATAN_JASA_PILIHAN.get(
+        jenis_cv, KETERAMPILAN_LAPANGAN_PILIHAN
+    )
 
     # Tempat menampilkan pengingat non-blocking setelah dokumen dibuat
     wadah_pengingat = st.container()
@@ -625,7 +668,7 @@ def halaman_cv():
         # ---------------------------------------------------------------
         # 2. UPLOAD DOKUMEN
         # ---------------------------------------------------------------
-        bagian_unggah_dokumen("cv", wajib_lisensi=not lapangan)
+        bagian_unggah_dokumen("cv", wajib_lisensi=perlu_lisensi_selam)
 
         # ---------------------------------------------------------------
         # 3. PENDIDIKAN
@@ -737,28 +780,42 @@ def halaman_cv():
             keterampilan_lapangan = []
 
         elif lapangan:
-            st.markdown("### 🛶 Pekerjaan dan Keterampilan Lapangan")
+            if jenis_cv == JENIS_PEMBANTU_LAPANGAN:
+                judul_bagian = "🛶 Pekerjaan dan Keterampilan Lapangan"
+                label_pekerjaan = "Pekerjaan Sehari-hari"
+                placeholder_pekerjaan = "Contoh: Nelayan, Buruh Harian, Petani"
+                label_keterampilan = "Keterampilan Khusus Lapangan"
+                judul_pengalaman = "🧰 Pengalaman Kerja Lapangan"
+            else:
+                judul_bagian = "🛠️ Spesialisasi dan Keahlian Jasa"
+                label_pekerjaan = "Spesialisasi / Peran Jasa"
+                placeholder_pekerjaan = f"Contoh: {jenis_cv}"
+                label_keterampilan = "Keahlian dan Peralatan yang Dikuasai"
+                judul_pengalaman = "🧰 Pengalaman Kerja / Proyek Relevan"
+
+            st.markdown(f"### {judul_bagian}")
             pekerjaan_sehari_hari = st.text_input(
-                "Pekerjaan Sehari-hari", key="cv_pekerjaan_sehari_hari",
-                placeholder="Contoh: Nelayan, Buruh Harian, Petani",
+                label_pekerjaan, key="cv_pekerjaan_sehari_hari",
+                placeholder=placeholder_pekerjaan,
             )
-            st.markdown("**Keterampilan Khusus Lapangan** (pilih yang sesuai)")
+            st.markdown(f"**{label_keterampilan}** (pilih yang sesuai)")
             kolkl = st.columns(2)
             keterampilan_lapangan = []
-            for i, ket in enumerate(KETERAMPILAN_LAPANGAN_PILIHAN):
+            _slug = jenis_cv.replace(" ", "_").replace("/", "_")
+            for i, ket in enumerate(pilihan_keterampilan_lapangan):
                 with kolkl[i % 2]:
-                    if st.checkbox(ket, key=f"cv_ket_lapangan_{i}"):
+                    if st.checkbox(ket, key=f"cv_ket_{_slug}_{i}"):
                         keterampilan_lapangan.append(ket)
             keterampilan_manual = st.text_input(
-                "Keterampilan lainnya (pisahkan dengan koma)",
-                key="cv_ket_lapangan_manual",
+                "Lainnya (pisahkan dengan koma)",
+                key=f"cv_ket_{_slug}_manual",
             )
             if keterampilan_manual.strip():
                 keterampilan_lapangan += [
                     k.strip() for k in keterampilan_manual.split(",") if k.strip()
                 ]
 
-            st.markdown("### 🧰 Pengalaman Kerja Lapangan")
+            st.markdown(f"### {judul_pengalaman}")
             st.caption("Klik baris terakhir untuk menambah data.")
             st.session_state.pengalaman_lapangan = st.data_editor(
                 st.session_state.pengalaman_lapangan,
