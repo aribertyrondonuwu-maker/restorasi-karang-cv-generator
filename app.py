@@ -1,1459 +1,577 @@
 """
-app.py — Titik masuk utama aplikasi web.
-
-Web Generator CV & Surat Tugas Dinas Luar untuk Tim Pelaksana kegiatan
-Relokasi dan Replanting/Restorasi Terumbu Karang PPS Kota Bitung TA 2026,
-Fakultas Perikanan dan Ilmu Kelautan, Universitas Sam Ratulangi.
-
-Jalankan dengan perintah:  streamlit run app.py
+app.py — Web Generator Terintegrasi: CV & Surat Tugas Dinas Luar
+Versi: 3.0 — Data CV Dr. Ari Berty Rondonuwu, M.Sc., M.Si. sudah di-pre-fill lengkap
+FPIK UNSRAT — Kegiatan Restorasi Terumbu Karang PPS Bitung TA 2026
 """
 
-from datetime import date
-import calendar
-
-import pandas as pd
 import streamlit as st
+import base64
+from datetime import date
+from cv_builder import CVData, generate_cv_docx
+from st_dinas_luar_builder import DataSuratTugas, generate_st_dinas_luar
 
-import utils
-from utils import (
-    NAMA_KEGIATAN_PENDEK, LOGO_PATH, logo_tersedia, BATAS_MB,
-    LABEL_DOKUMEN, MAKS_SERTIFIKAT, validasi_ukuran, adalah_pdf,
-    nama_berkas_aman,
-)
-from cv_builder import (
-    CVData, Lampiran, generate_cv_pdf, generate_cv_docx,
-    JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI, JENIS_PENYELAM,
-    JENIS_PEMBANTU_LAPANGAN, JENIS_DSO, JENIS_EDITOR_VIDEO, JENIS_DRONE,
-    JENIS_ANALIS_DATA,
-)
-from st_dinas_luar_builder import (
-    DataSuratTugas, generate_st_dinas_luar, generate_st_dinas_luar_pdf,
-)
-
-# =====================================================================
-# KONFIGURASI HALAMAN DAN TEMA
-# =====================================================================
-
+# ===================== KONFIGURASI HALAMAN =====================
 st.set_page_config(
-    page_title="Generator Dokumen Tim Pelaksana — FPIK UNSRAT",
+    page_title="Generator Tim Pelaksana PPS Bitung",
     page_icon="🌊",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-BIRU_LAUT = "#1B3F6B"
-HIJAU_KARANG = "#2D7D46"
-
-GAYA_APLIKASI = f"""
+# ===================== CUSTOM CSS =====================
+st.markdown("""
 <style>
-:root {{
-    --biru-laut: {BIRU_LAUT};
-    --hijau-karang: {HIJAU_KARANG};
-}}
-
-/* Kepala halaman */
-.kepala-aplikasi {{
-    background: {BIRU_LAUT};
-    padding: 18px 24px;
+.main-header {
+    background: linear-gradient(135deg, #1B3F6B 0%, #2D7D46 100%);
+    color: white;
+    padding: 1.2rem 1.5rem;
     border-radius: 10px;
-    margin-bottom: 8px;
-}}
-.kepala-judul {{
-    color: #FFFFFF;
-    font-size: 24px;
+    margin-bottom: 1.2rem;
+    text-align: center;
+}
+.main-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.4px; }
+.main-header p  { margin: 0.3rem 0 0 0; font-size: 0.82rem; opacity: 0.88; }
+.section-hdr {
+    background: #E8F4F8;
+    border-left: 5px solid #1B3F6B;
+    padding: 0.45rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1.1rem 0 0.4rem 0;
     font-weight: 700;
-    margin: 0;
-    line-height: 1.3;
-}}
-.kepala-subjudul {{
-    color: #C8DCEC;
-    font-size: 15px;
-    margin: 4px 0 0 0;
-}}
-.kepala-instansi {{
-    color: {HIJAU_KARANG};
-    background: #E7F3EB;
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 600;
-    margin-top: 8px;
-}}
-
-/* Judul bagian form */
-h3 {{
-    color: {BIRU_LAUT} !important;
-    border-bottom: 2px solid {HIJAU_KARANG};
-    padding-bottom: 6px;
-    margin-top: 22px !important;
-}}
-
-/* Tombol utama */
-div.stButton > button[kind="primary"],
-div.stDownloadButton > button {{
-    background-color: {BIRU_LAUT};
-    color: #FFFFFF;
-    border: none;
-    font-weight: 600;
-}}
-div.stButton > button[kind="primary"]:hover,
-div.stDownloadButton > button:hover {{
-    background-color: {HIJAU_KARANG};
-    color: #FFFFFF;
-}}
-
-/* Tab */
-.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {{
-    color: {BIRU_LAUT};
-    font-weight: 700;
-}}
-
-/* Kartu status unggahan */
-.kartu-berkas {{
-    border: 1px solid #D6E0EA;
-    border-left: 4px solid {HIJAU_KARANG};
-    background: #F6FAFD;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 13px;
-    margin-top: 6px;
-}}
-.kartu-berkas-kosong {{
-    border-left-color: #C0392B;
-    background: #FDF3F2;
-}}
+    color: #1B3F6B;
+    font-size: 0.97rem;
+}
+.info-karang {
+    background: #F0F9F4;
+    border-left: 4px solid #2D7D46;
+    padding: 0.55rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 0.8rem;
+    font-size: 0.87rem;
+    color: #1a5230;
+}
+.up-label  { font-weight: 600; color: #1B3F6B; font-size: 0.88rem; margin-bottom: 2px; }
+.up-req    { color: #cc0000; font-size: 0.78rem; }
+.up-opt    { color: #2D7D46; font-size: 0.78rem; }
+.err-block {
+    background: #fff0f0; border: 2px solid #cc0000;
+    border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1rem;
+}
 </style>
-"""
-st.markdown(GAYA_APLIKASI, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
+# ===================== HEADER =====================
+st.markdown("""
+<div class="main-header">
+    <h2>🌊 GENERATOR DOKUMEN TIM PELAKSANA SWAKELOLA</h2>
+    <p>Relokasi &amp; Replanting / Restorasi Terumbu Karang &nbsp;|&nbsp; PPS Kota Bitung &nbsp;|&nbsp; Tahun Anggaran 2026</p>
+    <p style="font-size:0.76rem;opacity:0.75;">Fakultas Perikanan dan Ilmu Kelautan (FPIK) — Universitas Sam Ratulangi (UNSRAT)</p>
+</div>
+""", unsafe_allow_html=True)
 
-# =====================================================================
-# GERBANG KATA SANDI
-# =====================================================================
+# ===================== DATA DEFAULT CV DR. ARI BERTY RONDONUWU =====================
+# Diisi otomatis dari CV lengkap 2025
+DEFAULT = {
+    "nama"         : "Dr. Ir. Ari Berty Rondonuwu, M.Sc., M.Si.",
+    "nip"          : "196801291993031001",
+    "nidn"         : "0029016804",
+    "ttl"          : "Tareran, 29 Januari 1968",
+    "jabatan"      : "Lektor Kepala — Penata / III-d",
+    "afiliasi"     : "Fakultas Perikanan dan Ilmu Kelautan (FPIK), Universitas Sam Ratulangi (UNSRAT), Manado",
+    "alamat"       : "Perumahan Duta Graha Blok B No. 14A, Kel. Malalayang II Lingkungan 8, Manado 95136",
+    "telepon"      : "081356033368",
+    "email"        : "arirondonuwu@unsrat.ac.id",
+    "peran_tim"    : "Ketua Tim Pelaksana",
+    "peran_teknis" : "Ahli Rehabilitasi Terumbu Karang (Team Leader)",
 
-def periksa_kata_sandi() -> bool:
-    """Menampilkan formulir kata sandi dan menahan akses sampai lolos.
+    # Format: Jenjang | Institusi | Bidang Studi | Tahun
+    "pendidikan": (
+        "S-1 / Ir. | Universitas Sam Ratulangi, Manado | Manajemen Sumberdaya Perairan | 1986–1991\n"
+        "S-2 / M.Sc. | Università Politecnica delle Marche, Ancona, Italia | Biodiversity & Management of Coral Reef | 2003–2004\n"
+        "S-2 / M.Si. | Universitas Sam Ratulangi, Manado | Ilmu Perairan | 2015–2017\n"
+        "S-3 / Dr. | Universitas Sam Ratulangi, Manado | Ilmu Kelautan | 2017–2020"
+    ),
 
-    Kata sandi diambil dari Streamlit Secrets (kunci APP_PASSWORD) agar
-    tidak tertulis langsung di kode sumber yang bersifat publik. Apabila
-    secrets belum diatur, gerbang ini dilewati secara otomatis supaya
-    aplikasi tetap bisa dijalankan saat pengembangan lokal.
-    """
-    kata_sandi_baku = st.secrets.get("APP_PASSWORD", None) if hasattr(
-        st, "secrets") else None
+    # Format: Lokasi | Metode | Periode | Mitra/Pemberi Kerja
+    "restorasi": (
+        "Pantai Malalayang, Manado | Transplantasi Karang & CSC | 2009–sekarang | PT. TJ Silfanus\n"
+        "Taman Nasional Bunaken | Terumbu Buatan + Transplantasi | 2018–2020 | Balai TN Bunaken\n"
+        "Pulau Lembeh, Bitung | Terumbu Buatan | 2020–2022 | DKP Kota Bitung\n"
+        "Poopoh, Minahasa | Transplantasi Partisipatif | 2015–2020 | Masyarakat Lokal\n"
+        "Desa Bahoi, Likupang Barat | Terumbu Buatan | 2012 | CCDP-IFAD\n"
+        "Pulau Bunaken, Kec. Bunaken Kepulauan | Restorasi Terumbu Karang | 2016 | DKP Sulut – APBD\n"
+        "Kab. Minahasa Selatan (Amurang Barat & Tatapaan) | Transplantasi Terumbu Karang | 2015 | APBD Kab. Minahasa Selatan\n"
+        "PPS Kota Bitung | Restorasi & Transplantasi Terumbu Karang | 2014 | DKP Kota Bitung\n"
+        "Underwater Coral Plantation, Selat Lembeh | Transplantasi CSR | 2016 | CSR Pelindo IV, Indofood CBP, DKP Bitung\n"
+        "Kelurahan Kareko, Bitung | Rehabilitasi Terumbu Karang Aqua Reef | 2014 | CCDP-IFAD\n"
+        "Manado Tua & Bahoi; Malalayang Dua | Restorasi Terumbu Karang | 2014–2015 | APBD/APBN Sulut"
+    ),
 
-    # Tidak ada kata sandi yang diatur -> lewati gerbang (mode pengembangan)
-    if not kata_sandi_baku:
-        return True
+    # Format: Tahun | Judul Penelitian | Sumber Dana
+    "penelitian": (
+        "2022 | Pemetaan Habitat Perairan Dangkal dengan UAV di Likupang | LPPM Unsrat\n"
+        "2021 | Pemetaan Ekosistem Terumbu Karang Pulau Serena dengan UAV | LPPM Unsrat\n"
+        "2019–2020 | Optimalisasi Artificial Reef dan Restorasi Terumbu Karang di Poopoh, Minahasa | DRPM DIKTI\n"
+        "2019–2020 | Monitoring Kesehatan Terumbu Karang di Kab. Raja Ampat | COREMAP-CTI LIPI\n"
+        "2019 | Inventarisasi Sumberdaya Ikan Karang di Kab. Raja Ampat | LIPI\n"
+        "2018 | Monitoring Status Ekosistem Terumbu Karang & Sumberdaya Ikan TN Bunaken | Balai TN Bunaken\n"
+        "2017 | DNA Barcoding Ikan Karang Endemik Sulawesi Utara (COI Sequencing) | Mandiri/PNBP Unsrat\n"
+        "2016 | Monitoring Terumbu Karang & Ekosistem Terkait di Salawati & Batanta, Raja Ampat | P2O LIPI Jakarta\n"
+        "2015–2016 | Ecological Assessment Reef Health Index di Kepulauan Sangihe | COREMAP World Bank\n"
+        "2014 | Survei Baseline Terumbu Karang & Ikan Karang Kepulauan Sangihe | COREMAP World Bank\n"
+        "2013 | Monitoring Terumbu Karang Taman Nasional Bunaken | ADB – BKSDA Sulut"
+    ),
 
-    if st.session_state.get("sudah_login", False):
-        return True
+    # Format: Tahun | Judul | Jurnal/Penerbit | Indeks
+    "publikasi": (
+        "2021 | Shallow water habitat mapping using UAV in Serena Island, North Sulawesi | AACL Bioflux 14(6) | Scopus Q3\n"
+        "2020 | Mitochondrial CO1 sequences of Banggai Cardinalfish (Pterapogon kauderni) | AACL Bioflux 13(2) | Scopus Q3\n"
+        "2019 | Coral reef health assessment at Salawati & Batanta, Raja Ampat | Ecology, Environment and Conservation 25(2) | Scopus\n"
+        "2023 | Biometrik Otolit Ikan Kardinal Banggai (Pterapogon kauderni) | Jurnal Ilmiah PLATAX 11(1) | SINTA 4\n"
+        "2022 | DNA Barcoding Ikan Kerapu (Epinephelus spp.) Perairan Sulawesi Utara | Jurnal PLATAX 10(1) | SINTA 4\n"
+        "2020 | Distribusi Ikan Karang di Ekosistem Terumbu Karang Pulau Serena, Minahasa Utara | Jurnal Ilmiah PLATAX 8(1) | SINTA 4\n"
+        "2019 | Kesehatan Terumbu Karang & Ekosistem Terkait di Pulau Salawati & Batanta, Raja Ampat (Buku) | Unsrat Press | ISBN 978-623-6818077\n"
+        "2016 | Ekologi Perairan Teluk Manado (Buku Referensi) | FPIK Unsrat Press | ISBN 978-602-0847054\n"
+        "2016 | Monitoring Terumbu Karang & Ekosistem Terkait, Salawati & Batanta 2016 (Buku) | P2O LIPI Jakarta | ISBN 978-602-9445947"
+    ),
 
-    st.markdown(
-        "<div style='max-width:420px;margin:80px auto 0;text-align:center;'>"
-        "<h3 style='color:#1B3F6B;'>🌊 Akses Terbatas</h3>"
-        "<p style='color:#666;font-size:14px;'>Masukkan kata sandi untuk "
-        "membuka Generator Dokumen Tim Pelaksana Swakelola.</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    # Format: Tahun | Kegiatan | Lokasi/Penyelenggara
+    "pengabdian": (
+        "2020 | Narasumber PEN Restorasi Terumbu Karang – ICRG (Pemberdayaan Masyarakat Bali Terdampak COVID-19) | Bali – Kemko Maritim & Investasi\n"
+        "2021 | Transplantasi Karang di Pantai Malalayang Depan Minanga Divers | Manado – FPIK Unsrat\n"
+        "2022 | Penggunaan Batok Kelapa untuk Mengurangi Pencemaran Plastik di Laut | Kec. Sario, Manado\n"
+        "2021 | Sosialisasi Biota Laut yang Dilindungi | Sulawesi Utara – FPIK Unsrat\n"
+        "2020 | Penanaman Mangrove di Perairan Pantai Depan Lab Basah FPIK Likupang Timur | Likupang Timur\n"
+        "2016 | Modul Pengenalan Ekosistem Terumbu Karang dan Metode Pemantauannya | Bitung – CCDP-IFAD\n"
+        "2015 | Fasilitasi Ekowisata Bahari, Kel. Pasirpanjang, Kec. Lembeh Selatan | Bitung – CCDP-IFAD\n"
+        "2014 | Pembentukan Daerah Perlindungan Laut (DPL) Berbasis Masyarakat | 6 Kelurahan Pulau Lembeh, Bitung\n"
+        "2014 | Pembentukan Daerah Perlindungan Mangrove | Kel. Pintu Kota, Bitung\n"
+        "2013 | IbM Desa Akembawi, Kec. Tahuna Barat, Kab. Kepulauan Sangihe | Sangihe – DIPA Unsrat\n"
+        "2012 | Penguatan Kesadaran Masyarakat Dalam Pengelolaan Wilayah Pesisir | Desa Bahoi, Kec. Likupang Barat"
+    ),
 
-    kol_kiri, kol_tengah, kol_kanan = st.columns([1, 1.2, 1])
-    with kol_tengah:
-        masukan = st.text_input(
-            "Kata Sandi", type="password", key="masukan_kata_sandi",
-            label_visibility="collapsed", placeholder="Kata sandi...",
-        )
-        tekan = st.button("Masuk", type="primary", width="stretch")
+    # Format: Tahun | Kegiatan | Lingkup Wilayah
+    "kebijakan": (
+        "2013–2017 | Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil (RZWP3K) Prov. Sulawesi Utara (Pokja/SK Gubernur) | Provinsi Sulawesi Utara\n"
+        "2020 | Tim Penyusun RPJMD Provinsi Sulawesi Utara 2021–2026 (SK Gubernur No. 116/2020) | Provinsi Sulawesi Utara\n"
+        "2020–skrg | Tim Teknis/Pokja Revisi RZWP3K & Sinkronisasi dengan RTRW Prov. Sulawesi Utara | Provinsi Sulawesi Utara\n"
+        "2021 | Tim Penyusun Integrasi Perda Sulut No. 1/2017 ke dalam Revisi Perda Sulut No. 1/2014 & KLHS Terintegrasi | Provinsi Sulawesi Utara\n"
+        "2018–2019 | Narasumber Success Story RZWP3K Sulut dalam Penyusunan RZWP3K Papua Barat | Manokwari, Papua Barat\n"
+        "2015 | Pengelolaan Wilayah Pesisir Terpadu Berbasis Masyarakat | 9 Kelurahan Pulau Lembeh, Bitung\n"
+        "2016 | Ekowisata Berbasis Masyarakat | Kel. Pasirpanjang, Kareko, dan Pintu Kota, Bitung"
+    ),
 
-        if tekan:
-            if masukan == kata_sandi_baku:
-                st.session_state.sudah_login = True
-                st.rerun()
-            else:
-                st.error("Kata sandi salah. Silakan coba lagi.")
+    # Sertifikasi selam
+    "sertifikasi": (
+        "Sertifikasi Selam: Open Water — POSSI (1994)\n"
+        "Sertifikasi Selam: Open Water — PADI (2004)\n"
+        "Sertifikasi Selam: Advanced Open Water — PADI (2004)\n"
+        "Pengalaman Penyelaman Ilmiah: >500 jam selam terverifikasi (1994–2024)\n"
+        "Spesialisasi: Survei Terumbu Karang Bawah Air, Transplantasi Karang, Reef Monitoring, Pemetaan Habitat Bawah Air\n"
+        "Instruktur Pelatihan Selam & Metodologi Penelitian Bawah Air: P3O LIPI Jakarta, Ambon, NTB (1995, 1996, 1999)\n"
+        "International Workshop & Training: Field Identification and Taxonomy of Reef Building Corals, Manado, 28–31 Juli 2003"
+    ),
 
-    return False
-
-
-# =====================================================================
-# INISIALISASI SESSION STATE
-# =====================================================================
-
-TABEL_KOSONG = {
-    "pendidikan": pd.DataFrame([
-        {"Jenjang": "", "Jurusan": "", "Universitas": "", "Kota": "",
-         "Tahun Lulus": ""}
-    ]),
-    "sertifikasi": pd.DataFrame([
-        {"Nama Sertifikat": "", "Nomor": "", "Lembaga Penerbit": "",
-         "Tahun": "", "Masa Berlaku": ""}
-    ]),
-    "pengalaman_kerja": pd.DataFrame([
-        {"Nama Pekerjaan/Proyek": "", "Tahun": "", "Jabatan/Posisi": "",
-         "Instansi Pemberi Kerja": "", "Lokasi": ""} for _ in range(5)
-    ]),
-    "publikasi": pd.DataFrame([
-        {"Judul": "", "Jurnal/Prosiding": "", "Tahun": ""}
-    ]),
-    "pengalaman_selam": pd.DataFrame([
-        {"Lokasi Penyelaman": "", "Tahun": "", "Jenis Kegiatan": "",
-         "Kedalaman Maks (m)": "", "Lama Kegiatan": "", "Pemberi Kerja": ""}
-        for _ in range(5)
-    ]),
-    "pengalaman_lapangan": pd.DataFrame([
-        {"Kegiatan": "", "Tahun": "", "Lokasi": "", "Pemberi Kerja": ""}
-        for _ in range(5)
-    ]),
-    "personil_st": pd.DataFrame([
-        {"Nama": "", "NIP": "", "Jabatan": "", "Peran dalam Tim": ""}
-    ]),
+    # Keahlian inti (pisah koma)
+    "keahlian": (
+        "Koralogi & Ekologi Terumbu Karang, "
+        "Restorasi & Transplantasi Terumbu Karang, "
+        "Iktiologi & DNA Barcoding (COI), "
+        "Biodiversitas Pesisir Tropis, "
+        "UAV/Drone Mapping Habitat Pesisir, "
+        "GIS & Penginderaan Jauh, "
+        "Pengelolaan Wilayah Pesisir Terpadu, "
+        "Scientific Diving & Reef Survey, "
+        "Manajemen Kawasan Konservasi Laut, "
+        "Ekowisata Bahari Berbasis Masyarakat"
+    ),
 }
 
-BIDANG_KEAHLIAN_PILIHAN = [
-    "Ekologi Laut", "Terumbu Karang", "Oseanografi", "Biologi Perairan",
-    "Pengelolaan Pesisir", "Mangrove", "Lingkungan Hidup",
-]
 
-KEAHLIAN_SELAM_PILIHAN = [
-    "Transplantasi Karang", "Reef Survey", "Underwater Photography",
-    "Videografi Bawah Air", "ROV Assist",
-    "Penandaan dan Pemetaan Terumbu Karang", "Pengambilan Sampel Biologi",
-    "Dive Safety Officer / Pengawas Keselamatan Selam",
-    "Penyusunan Rencana Keselamatan Penyelaman (Dive Safety Plan)",
-    "P3K Selam & Penanganan Kecelakaan Dekompresi",
-    "Pengawasan Kompresor dan Tabung Selam",
-]
+# ===================== SESSION STATE =====================
+def init_ss():
+    """Inisialisasi session state agar data form tidak hilang saat interaksi UI."""
+    for k, v in DEFAULT.items():
+        sk = f"d_{k}"
+        if sk not in st.session_state:
+            st.session_state[sk] = v
+    for fk in ["foto_bytes", "foto_name",
+                "ktp_bytes",  "ktp_name",
+                "lis_bytes",  "lis_name",
+                "sert_list"]:
+        if fk not in st.session_state:
+            st.session_state[fk] = None if fk != "sert_list" else []
 
-KETERAMPILAN_LAPANGAN_PILIHAN = [
-    "Mengemudikan Perahu/Kapal Motor", "Mengenal Kondisi Perairan dan Arus Setempat",
-    "Angkat-Angkut dan Logistik Lapangan", "Menyelam Tradisional/Skin Diving",
-    "Pemandu Lokal / Penunjuk Lokasi",
-    "Perawatan dan Perbaikan Peralatan Lapangan",
-]
-
-KETERAMPILAN_EDITOR_VIDEO_PILIHAN = [
-    "Adobe Premiere Pro", "DaVinci Resolve", "Adobe After Effects",
-    "Color Grading Bawah Air", "Videografi Bawah Air (Underwater Videography)",
-    "Motion Graphics & Subtitle",
-]
-
-KETERAMPILAN_DRONE_PILIHAN = [
-    "Piloting Drone Survei (DJI Phantom/Mavic, dll)",
-    "Pengolahan Ortomosaik (Pix4D/Agisoft Metashape)",
-    "GIS (QGIS/ArcGIS)", "Pemetaan Fotogrametri",
-    "Perizinan dan Keselamatan Penerbangan Drone",
-]
-
-KETERAMPILAN_ANALIS_DATA_PILIHAN = [
-    "Analisis Statistik (R/Python/SPSS)", "Visualisasi Data (Excel/Tableau/Power BI)",
-    "Pengelolaan Basis Data Ekologi", "Pemodelan Spasial",
-    "Penyusunan Laporan Ilmiah dan Publikasi Data",
-]
-
-# Peta jenis jasa (form sederhana) -> daftar pilihan keahlian/peralatan
-PERALATAN_JASA_PILIHAN = {
-    JENIS_EDITOR_VIDEO: KETERAMPILAN_EDITOR_VIDEO_PILIHAN,
-    JENIS_DRONE: KETERAMPILAN_DRONE_PILIHAN,
-    JENIS_ANALIS_DATA: KETERAMPILAN_ANALIS_DATA_PILIHAN,
-}
-
-PERAN_TIM_PILIHAN = [
-    "Ketua Tim Pelaksana", "Anggota Tim Pelaksana", "Pembantu Peneliti",
-    "Penyelam Bersertifikat", "Pembantu Lapangan",
-    "Jasa Diving Safety Officer / K3 Penyelaman", "Jasa Editing Video",
-    "Jasa Pemetaan Drone", "Jasa Analisis Data",
-]
-
-BULAN_PILIHAN = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-]
+init_ss()
 
 
-def siapkan_session_state():
-    """Menyiapkan seluruh kunci session_state agar data form tidak hilang.
-
-    Streamlit menjalankan ulang skrip setiap kali pengguna berinteraksi
-    dengan antarmuka. Tanpa session_state, isian form akan hilang.
-    """
-    for nama, kerangka in TABEL_KOSONG.items():
-        if nama not in st.session_state:
-            st.session_state[nama] = kerangka.copy()
-
-    berkas_awal = {
-        "berkas_foto": None,
-        "berkas_ktp": None,
-        "berkas_lisensi": None,
-        "berkas_sertifikat": [],
-        "hasil_cv_pdf": None,
-        "hasil_cv_docx": None,
-        "hasil_st_pdf": None,
-        "hasil_st_docx": None,
-        "data_cv_terakhir": None,
-        "cv_ringkasan_afiliasi": "",
-    }
-    for kunci, nilai in berkas_awal.items():
-        if kunci not in st.session_state:
-            st.session_state[kunci] = nilai
-
-
-siapkan_session_state()
-
-
-# =====================================================================
-# KOMPONEN ANTARMUKA BERSAMA
-# =====================================================================
-
-def tampilkan_kepala():
-    """Menampilkan kepala aplikasi berisi logo dan nama kegiatan."""
-    kolom_logo, kolom_teks = st.columns([1, 9])
-
-    with kolom_logo:
-        if logo_tersedia():
-            st.image(LOGO_PATH, width=78)
-        else:
-            st.markdown(
-                "<div style='width:78px;height:78px;border:2px dashed #B0C4D8;"
-                "border-radius:8px;display:flex;align-items:center;"
-                "justify-content:center;color:#8FA6BC;font-size:11px;"
-                "text-align:center;'>LOGO<br>INSTANSI</div>",
-                unsafe_allow_html=True,
-            )
-
-    with kolom_teks:
-        st.markdown(
-            "<div class='kepala-aplikasi'>"
-            "<p class='kepala-judul'>Generator Dokumen Tim Pelaksana "
-            "Swakelola</p>"
-            f"<p class='kepala-subjudul'>{NAMA_KEGIATAN_PENDEK}</p>"
-            "<span class='kepala-instansi'>Fakultas Perikanan dan Ilmu "
-            "Kelautan — Universitas Sam Ratulangi</span>"
-            "</div>",
-            unsafe_allow_html=True,
+# ===================== HELPERS =====================
+def cek_ukuran(f, maks_mb: float) -> bool:
+    """Validasi ukuran file upload. Tampilkan error jika melebihi batas."""
+    if f is None:
+        return True
+    mb = len(f.getvalue()) / (1024 * 1024)
+    if mb > maks_mb:
+        st.error(
+            f"⚠️ File **{f.name}** melebihi batas **{maks_mb} MB** "
+            f"(ukuran: {mb:.2f} MB). Harap kompres atau ganti file."
         )
+        return False
+    return True
 
 
-def pratinjau_berkas(berkas, label: str, wajib: bool = True):
-    """Menampilkan pratinjau berkas unggahan beserta status validasinya.
-
-    Gambar ditampilkan sebagai gambar kecil, sedangkan berkas PDF
-    ditampilkan sebagai kartu keterangan dengan nama berkas.
-    """
-    if berkas is None:
-        kelas = "kartu-berkas kartu-berkas-kosong" if wajib else "kartu-berkas"
-        keterangan = "Wajib diunggah" if wajib else "Opsional"
-        st.markdown(
-            f"<div class='{kelas}'>Belum ada berkas — {keterangan}</div>",
-            unsafe_allow_html=True,
-        )
+def preview_file(bts, nama: str, label: str = ""):
+    """Tampilkan preview gambar atau ikon PDF setelah upload."""
+    if bts is None:
         return
-
-    if adalah_pdf(berkas.name):
-        ukuran_kb = len(berkas.getvalue()) / 1024
-        st.markdown(
-            f"<div class='kartu-berkas'>📄 <b>{berkas.name}</b><br>"
-            f"Dokumen PDF · {ukuran_kb:,.0f} KB</div>",
-            unsafe_allow_html=True,
-        )
+    if label:
+        st.caption(f"✅ {label}")
+    if str(nama).lower().endswith(".pdf"):
+        st.info(f"📄 {nama} (PDF)")
     else:
-        st.image(berkas.getvalue(), width=140, caption=berkas.name)
+        try:
+            st.image(bts, width=110)
+        except Exception:
+            st.info(f"🖼️ {nama}")
 
 
-def bagian_unggah_dokumen(kunci_awalan: str = "cv", wajib_lisensi: bool = True):
-    """Menampilkan empat widget unggahan dokumen beserta validasinya.
+# ===================== TAB NAVIGASI =====================
+tab1, tab2 = st.tabs([
+    "📄 Generator CV — Tenaga Ahli / Spesialis Penyelaman",
+    "✉️ Generator Surat Tugas Dinas Luar"
+])
 
-    Berkas yang lolos validasi ukuran disimpan ke session_state agar tetap
-    tersedia meskipun antarmuka dijalankan ulang. Parameter `wajib_lisensi`
-    diset False untuk jenis CV yang personilnya tidak menyelam (Pembantu
-    Lapangan), sehingga License Menyelam SCUBA menjadi opsional.
-    """
-    st.markdown("### 📎 Upload Dokumen")
-    st.caption(
-        "Unggah seluruh dokumen persyaratan terlebih dahulu sebelum "
-        "melanjutkan pengisian data. Berkas akan disisipkan sebagai halaman "
-        "lampiran pada dokumen CV."
-    )
 
-    kol1, kol2 = st.columns(2)
+# ╔══════════════════════════════════════════════╗
+# ║           TAB 1 — GENERATOR CV              ║
+# ╚══════════════════════════════════════════════╝
+with tab1:
+    st.markdown("""
+    <div class="info-karang">
+        📌 Form sudah diisi otomatis dari CV Dr. Ari Berty Rondonuwu (2025).
+        Periksa, sesuaikan jika perlu, lalu upload dokumen dan klik <b>Generate CV</b>.
+    </div>
+    """, unsafe_allow_html=True)
 
-    # --- 1. Pas foto 3x4 ---
-    with kol1:
-        st.markdown(f"**1. {LABEL_DOKUMEN['foto']}** · maks {BATAS_MB['foto']} MB")
-        foto = st.file_uploader(
-            "Pas Foto 3x4 (JPG/PNG)",
-            type=["jpg", "jpeg", "png"],
-            key=f"{kunci_awalan}_unggah_foto",
-            label_visibility="collapsed",
+    # ── A. DATA PRIBADI ────────────────────────────────
+    st.markdown('<div class="section-hdr">👤 A. Data Pribadi</div>', unsafe_allow_html=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        nama     = st.text_input("Nama Lengkap (dengan gelar) *", value=st.session_state["d_nama"])
+        nip      = st.text_input("NIP", value=st.session_state["d_nip"])
+        nidn     = st.text_input("NIDN", value=st.session_state["d_nidn"])
+        ttl      = st.text_input("Tempat, Tanggal Lahir *", value=st.session_state["d_ttl"])
+        jabatan  = st.text_input("Jabatan Fungsional *", value=st.session_state["d_jabatan"])
+    with c2:
+        afiliasi = st.text_input("Institusi / Afiliasi *", value=st.session_state["d_afiliasi"])
+        alamat   = st.text_area("Alamat Lengkap *", value=st.session_state["d_alamat"], height=80)
+        telepon  = st.text_input("No. Telepon / HP *", value=st.session_state["d_telepon"])
+        email    = st.text_input("Email Aktif *", value=st.session_state["d_email"])
+
+    c3, c4 = st.columns(2)
+    with c3:
+        peran_tim = st.selectbox(
+            "Kedudukan dalam Tim *",
+            ["Ketua Tim Pelaksana", "Anggota Tim Pelaksana",
+             "Pembantu Peneliti", "Penyelam Bersertifikat"],
+            index=0
         )
-        galat = validasi_ukuran(foto, "foto")
-        if galat:
-            st.error(galat)
-        else:
-            st.session_state.berkas_foto = foto
-        pratinjau_berkas(st.session_state.berkas_foto, LABEL_DOKUMEN["foto"])
-
-    # --- 2. KTP ---
-    with kol2:
-        st.markdown(f"**2. {LABEL_DOKUMEN['ktp']}** · maks {BATAS_MB['ktp']} MB")
-        ktp = st.file_uploader(
-            "KTP (JPG/PNG/PDF)",
-            type=["jpg", "jpeg", "png", "pdf"],
-            key=f"{kunci_awalan}_unggah_ktp",
-            label_visibility="collapsed",
-        )
-        galat = validasi_ukuran(ktp, "ktp")
-        if galat:
-            st.error(galat)
-        else:
-            st.session_state.berkas_ktp = ktp
-        pratinjau_berkas(st.session_state.berkas_ktp, LABEL_DOKUMEN["ktp"])
-
-    kol3, kol4 = st.columns(2)
-
-    # --- 3. Lisensi menyelam SCUBA ---
-    with kol3:
-        label_wajib = "" if wajib_lisensi else " (opsional)"
-        st.markdown(
-            f"**3. {LABEL_DOKUMEN['lisensi']}**{label_wajib} · maks "
-            f"{BATAS_MB['lisensi']} MB"
-        )
-        st.caption("Berlaku untuk PADI, SSI, CMAS, TNI-AL, atau lisensi lain.")
-        lisensi = st.file_uploader(
-            "License Menyelam SCUBA (JPG/PNG/PDF)",
-            type=["jpg", "jpeg", "png", "pdf"],
-            key=f"{kunci_awalan}_unggah_lisensi",
-            label_visibility="collapsed",
-        )
-        galat = validasi_ukuran(lisensi, "lisensi")
-        if galat:
-            st.error(galat)
-        else:
-            st.session_state.berkas_lisensi = lisensi
-        pratinjau_berkas(
-            st.session_state.berkas_lisensi, LABEL_DOKUMEN["lisensi"],
-            wajib=wajib_lisensi,
+    with c4:
+        peran_teknis = st.text_input(
+            "Peran Teknis *", value=st.session_state["d_peran_teknis"]
         )
 
-    # --- 4. Sertifikat lainnya (opsional, banyak berkas) ---
-    with kol4:
-        st.markdown(
-            f"**4. {LABEL_DOKUMEN['sertifikat']}** (opsional) · maks "
-            f"{BATAS_MB['sertifikat']} MB per berkas"
-        )
-        st.caption(
-            f"Contoh: sertifikat BNSP, pelatihan, medis selam (fit to dive). "
-            f"Maksimal {MAKS_SERTIFIKAT} berkas."
-        )
-        sertifikat = st.file_uploader(
-            "Sertifikat Lainnya (JPG/PNG/PDF)",
-            type=["jpg", "jpeg", "png", "pdf"],
-            accept_multiple_files=True,
-            key=f"{kunci_awalan}_unggah_sertifikat",
-            label_visibility="collapsed",
-        )
-
-        if sertifikat:
-            if len(sertifikat) > MAKS_SERTIFIKAT:
-                st.error(
-                    f"Jumlah berkas melebihi batas. Maksimal "
-                    f"{MAKS_SERTIFIKAT} berkas sekaligus."
-                )
-                sertifikat = sertifikat[:MAKS_SERTIFIKAT]
-
-            lolos = []
-            for berkas in sertifikat:
-                galat = validasi_ukuran(berkas, "sertifikat")
-                if galat:
-                    st.error(galat)
-                else:
-                    lolos.append(berkas)
-            st.session_state.berkas_sertifikat = lolos
-
-        daftar = st.session_state.berkas_sertifikat
-        if daftar:
-            st.markdown(
-                f"<div class='kartu-berkas'>{len(daftar)} berkas siap "
-                f"dilampirkan</div>", unsafe_allow_html=True,
-            )
-            for berkas in daftar:
-                pratinjau_berkas(berkas, "Sertifikat", wajib=False)
-        else:
-            pratinjau_berkas(None, "Sertifikat", wajib=False)
-
-
-def susun_lampiran() -> list:
-    """Menyusun daftar lampiran berurutan dari berkas yang telah diunggah.
-
-    Urutan: KTP, License Menyelam SCUBA, kemudian sertifikat lainnya.
-    """
-    daftar = []
-
-    if st.session_state.berkas_ktp:
-        b = st.session_state.berkas_ktp
-        daftar.append(Lampiran(
-            judul="KTP", nama_berkas=b.name, data=b.getvalue(),
-            adalah_pdf=adalah_pdf(b.name),
-        ))
-
-    if st.session_state.berkas_lisensi:
-        b = st.session_state.berkas_lisensi
-        daftar.append(Lampiran(
-            judul="License Menyelam SCUBA", nama_berkas=b.name,
-            data=b.getvalue(), adalah_pdf=adalah_pdf(b.name),
-        ))
-
-    for b in st.session_state.berkas_sertifikat:
-        daftar.append(Lampiran(
-            judul=f"Sertifikat — {b.name}", nama_berkas=b.name,
-            data=b.getvalue(), adalah_pdf=adalah_pdf(b.name),
-        ))
-
-    return daftar
-
-
-def bersihkan_tabel(kerangka: pd.DataFrame) -> list:
-    """Membuang baris kosong dari tabel dan mengubahnya menjadi daftar dict."""
-    if kerangka is None or kerangka.empty:
-        return []
-    bersih = kerangka.fillna("").astype(str)
-    hasil = []
-    for _, baris in bersih.iterrows():
-        nilai = {k: str(v).strip() for k, v in baris.items()}
-        if any(nilai.values()):
-            hasil.append(nilai)
-    return hasil
-
-
-# =====================================================================
-# HALAMAN 1 — GENERATOR CV
-# =====================================================================
-
-def halaman_cv():
-    """Menampilkan halaman form dan pembuatan dokumen Curriculum Vitae."""
-    # Terapkan draf Ringkasan Keterkaitan yang tertunda (bila ada) SEBELUM
-    # widget kotak teksnya dibuat, supaya tidak melanggar batasan Streamlit
-    # yang melarang menulis session_state milik widget yang sudah dirender.
-    if "_draf_ringkasan_tertunda" in st.session_state:
-        st.session_state["cv_ringkasan_afiliasi"] = (
-            st.session_state.pop("_draf_ringkasan_tertunda")
-        )
-
-    st.markdown("## 📄 Generator Curriculum Vitae")
-    st.caption(
-        "Semua kolom dapat dikosongkan bila belum ada datanya — dokumen "
-        "tetap bisa dibuat dan dilengkapi kemudian."
-    )
-
-    jenis_cv = st.selectbox(
-        "Jenis CV yang akan dibuat",
-        [JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI, JENIS_PENYELAM,
-         JENIS_DSO, JENIS_PEMBANTU_LAPANGAN, JENIS_EDITOR_VIDEO,
-         JENIS_DRONE, JENIS_ANALIS_DATA],
-        key="cv_jenis",
-        help=(
-            "Tenaga Ahli & Pembantu Peneliti: pendidikan, publikasi, "
-            "pengalaman kerja (field sama, beda skema honor). Tenaga "
-            "Spesialis Penyelaman & Jasa Diving Safety Officer: lisensi "
-            "selam dan jam selam. Pembantu Lapangan & jasa spesialis "
-            "lainnya (Editing Video/Pemetaan Drone/Analisis Data): form "
-            "sederhana berisi keahlian/peralatan dan pengalaman proyek."
-        ),
-    )
-    penyelam = jenis_cv in (JENIS_PENYELAM, JENIS_DSO)
-    lapangan = jenis_cv in (
-        JENIS_PEMBANTU_LAPANGAN, JENIS_EDITOR_VIDEO, JENIS_DRONE,
-        JENIS_ANALIS_DATA,
-    )
-    ahli_atau_peneliti = jenis_cv in (JENIS_TENAGA_AHLI, JENIS_PEMBANTU_PENELITI)
-    # Hanya Penyelam & DSO yang benar-benar wajib punya lisensi selam
-    perlu_lisensi_selam = jenis_cv in (JENIS_PENYELAM, JENIS_DSO)
-    # Daftar pilihan keahlian/peralatan menyesuaikan jenis jasa lapangan
-    pilihan_keterampilan_lapangan = PERALATAN_JASA_PILIHAN.get(
-        jenis_cv, KETERAMPILAN_LAPANGAN_PILIHAN
-    )
-
-    # Tempat menampilkan pengingat non-blocking setelah dokumen dibuat
-    wadah_pengingat = st.container()
-
-    with st.form("form_cv", clear_on_submit=False):
-        # ---------------------------------------------------------------
-        # 1. DATA PRIBADI
-        # ---------------------------------------------------------------
-        st.markdown("### 👤 Data Pribadi")
-        kol1, kol2, kol3 = st.columns(3)
-
-        with kol1:
-            nama = st.text_input("Nama Lengkap (dengan gelar)", key="cv_nama")
-            tempat_lahir = st.text_input("Tempat Lahir", key="cv_tempat_lahir")
-
-            st.markdown("Tanggal Lahir")
-            koltl1, koltl2, koltl3 = st.columns([1, 1.4, 1.2])
-            with koltl1:
-                hari_lahir = st.selectbox(
-                    "Tanggal", list(range(1, 32)), index=0,
-                    key="cv_hari_lahir", label_visibility="collapsed",
-                )
-            with koltl2:
-                bulan_lahir = st.selectbox(
-                    "Bulan", BULAN_PILIHAN, index=0,
-                    key="cv_bulan_lahir", label_visibility="collapsed",
-                )
-            with koltl3:
-                tahun_sekarang = date.today().year
-                daftar_tahun = list(range(tahun_sekarang, 1939, -1))
-                tahun_lahir = st.selectbox(
-                    "Tahun", daftar_tahun,
-                    index=daftar_tahun.index(tahun_sekarang - 40)
-                    if (tahun_sekarang - 40) in daftar_tahun else 0,
-                    key="cv_tahun_lahir", label_visibility="collapsed",
-                )
-            try:
-                hari_maks = calendar.monthrange(
-                    tahun_lahir, BULAN_PILIHAN.index(bulan_lahir) + 1
-                )[1]
-                tanggal_lahir = date(
-                    tahun_lahir, BULAN_PILIHAN.index(bulan_lahir) + 1,
-                    min(hari_lahir, hari_maks),
-                )
-            except ValueError:
-                tanggal_lahir = date(tahun_lahir, 1, 1)
-
-            jenis_kelamin = st.selectbox(
-                "Jenis Kelamin", ["", "Laki-laki", "Perempuan"],
-                key="cv_jenis_kelamin",
-            )
-
-        with kol2:
-            agama = st.selectbox(
-                "Agama",
-                ["", "Islam", "Kristen Protestan", "Katolik", "Hindu", "Buddha",
-                 "Khonghucu", "Lainnya"],
-                key="cv_agama",
-            )
-            kewarganegaraan = st.text_input(
-                "Kewarganegaraan", value="Indonesia", key="cv_kewarganegaraan"
-            )
-            nomor_ktp = st.text_input(
-                "Nomor KTP (NIK)", max_chars=16, key="cv_nomor_ktp",
-                help="16 digit angka, sebaiknya sama dengan nomor pada scan KTP.",
-            )
-            npwp = st.text_input("NPWP (opsional)", key="cv_npwp")
-
-        with kol3:
-            telepon = st.text_input("Nomor Telepon / HP", key="cv_telepon")
-            email = st.text_input("Email", key="cv_email")
-            alamat = st.text_area("Alamat Lengkap", height=100, key="cv_alamat")
-
-        with st.expander("Data kepegawaian dan peran dalam tim (opsional untuk non-ASN)"):
-            kolp1, kolp2 = st.columns(2)
-            with kolp1:
-                nip = st.text_input("NIP", key="cv_nip")
-                nidn = st.text_input("NIDN", key="cv_nidn")
-                jabatan = st.text_input("Jabatan Fungsional", key="cv_jabatan")
-            with kolp2:
-                afiliasi = st.text_input(
-                    "Afiliasi Institusi",
-                    value="Fakultas Perikanan dan Ilmu Kelautan, "
-                          "Universitas Sam Ratulangi",
-                    key="cv_afiliasi",
-                )
-                peran_tim = st.selectbox(
-                    "Kedudukan dalam Tim", [""] + PERAN_TIM_PILIHAN,
-                    key="cv_peran_tim",
-                )
-                peran_teknis = st.text_input("Peran Teknis", key="cv_peran_teknis")
-
-        # ---------------------------------------------------------------
-        # 2. UPLOAD DOKUMEN
-        # ---------------------------------------------------------------
-        bagian_unggah_dokumen("cv", wajib_lisensi=perlu_lisensi_selam)
-
-        # ---------------------------------------------------------------
-        # 3. PENDIDIKAN
-        # ---------------------------------------------------------------
-        judul_pendidikan = (
-            "🎓 Pendidikan Formal (opsional)" if (penyelam or lapangan)
-            else "🎓 Riwayat Pendidikan"
-        )
-        st.markdown(f"### {judul_pendidikan}")
-        st.caption("Klik baris terakhir untuk menambah data.")
-        st.session_state.pendidikan = st.data_editor(
-            st.session_state.pendidikan,
-            num_rows="dynamic", width="stretch", key="ed_pendidikan",
-            column_config={
-                "Jenjang": st.column_config.SelectboxColumn(
-                    "Jenjang",
-                    options=["SD", "SMP", "SMA/SMK", "D3", "D4", "S1", "S2", "S3"],
-                    width="small",
-                ),
-                "Tahun Lulus": st.column_config.TextColumn("Tahun Lulus", width="small"),
-            },
-        )
-
-        # ---------------------------------------------------------------
-        # 4. BAGIAN KHUSUS SESUAI JENIS CV
-        # ---------------------------------------------------------------
-        if penyelam:
-            st.markdown("### 🤿 Sertifikat Selam Utama")
-            kols1, kols2, kols3 = st.columns(3)
-            with kols1:
-                lisensi_jenis = st.selectbox(
-                    "Jenis Lisensi",
-                    ["", "PADI", "SSI", "CMAS", "TNI-AL", "Lainnya"],
-                    key="cv_lisensi_jenis",
-                )
-                lisensi_nomor = st.text_input(
-                    "Nomor Sertifikat", key="cv_lisensi_nomor"
-                )
-            with kols2:
-                lisensi_level = st.selectbox(
-                    "Level Sertifikasi",
-                    ["", "Open Water", "Advanced", "Rescue Diver", "Divemaster",
-                     "Instructor", "Scientific Diver"],
-                    key="cv_lisensi_level",
-                )
-                lisensi_terbit = st.date_input(
-                    "Tanggal Terbit", value=date(2020, 1, 1),
-                    min_value=date(1970, 1, 1), format="DD/MM/YYYY",
-                    key="cv_lisensi_terbit",
-                )
-            with kols3:
-                seumur_hidup = st.checkbox(
-                    "Berlaku seumur hidup", value=True, key="cv_lisensi_seumur"
-                )
-                lisensi_berlaku_input = st.date_input(
-                    "Masa Berlaku (abaikan bila seumur hidup)",
-                    value=date(2030, 1, 1),
-                    format="DD/MM/YYYY", key="cv_lisensi_berlaku",
-                )
-                lisensi_berlaku = None if seumur_hidup else lisensi_berlaku_input
-
-            st.markdown("### 🩺 Sertifikat Medis Selam (Fit to Dive) — opsional")
-            kolm1, kolm2 = st.columns(2)
-            with kolm1:
-                medis_nomor = st.text_input("Nomor Sertifikat", key="cv_medis_nomor")
-                medis_penerbit = st.text_input(
-                    "Nama Dokter / Klinik Penerbit", key="cv_medis_penerbit"
-                )
-            with kolm2:
-                medis_terbit = st.date_input(
-                    "Tanggal Terbit", value=date.today(),
-                    format="DD/MM/YYYY", key="cv_medis_terbit",
-                )
-                medis_berlaku = st.date_input(
-                    "Berlaku Sampai", value=date(date.today().year + 1, 1, 1),
-                    format="DD/MM/YYYY", key="cv_medis_berlaku",
-                )
-
-            st.markdown("### 🌊 Kompetensi Penyelaman")
-            total_jam_selam = st.number_input(
-                "Total Jam Selam Terverifikasi (jam)",
-                min_value=0, max_value=100000, step=10, key="cv_total_jam",
-            )
-            st.markdown("**Keahlian Khusus Penyelaman** (pilih yang sesuai)")
-            kolk = st.columns(2)
-            keahlian_selam = []
-            for i, keahlian in enumerate(KEAHLIAN_SELAM_PILIHAN):
-                with kolk[i % 2]:
-                    if st.checkbox(keahlian, key=f"cv_keahlian_{i}"):
-                        keahlian_selam.append(keahlian)
-
-            st.markdown("### 🐠 Pengalaman Penyelaman")
-            st.caption("Klik baris terakhir untuk menambah data.")
-            st.session_state.pengalaman_selam = st.data_editor(
-                st.session_state.pengalaman_selam,
-                num_rows="dynamic", width="stretch",
-                key="ed_pengalaman_selam",
-                column_config={
-                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-                    "Kedalaman Maks (m)": st.column_config.TextColumn(
-                        "Kedalaman Maks (m)", width="small"
-                    ),
-                },
-            )
-
-            bidang_keahlian = []
-            publikasi_bersih = []
-            pekerjaan_sehari_hari = ""
-            keterampilan_lapangan = []
-
-        elif lapangan:
-            if jenis_cv == JENIS_PEMBANTU_LAPANGAN:
-                judul_bagian = "🛶 Pekerjaan dan Keterampilan Lapangan"
-                label_pekerjaan = "Pekerjaan Sehari-hari"
-                placeholder_pekerjaan = "Contoh: Nelayan, Buruh Harian, Petani"
-                label_keterampilan = "Keterampilan Khusus Lapangan"
-                judul_pengalaman = "🧰 Pengalaman Kerja Lapangan"
-            else:
-                judul_bagian = "🛠️ Spesialisasi dan Keahlian Jasa"
-                label_pekerjaan = "Spesialisasi / Peran Jasa"
-                placeholder_pekerjaan = f"Contoh: {jenis_cv}"
-                label_keterampilan = "Keahlian dan Peralatan yang Dikuasai"
-                judul_pengalaman = "🧰 Pengalaman Kerja / Proyek Relevan"
-
-            st.markdown(f"### {judul_bagian}")
-            pekerjaan_sehari_hari = st.text_input(
-                label_pekerjaan, key="cv_pekerjaan_sehari_hari",
-                placeholder=placeholder_pekerjaan,
-            )
-            st.markdown(f"**{label_keterampilan}** (pilih yang sesuai)")
-            kolkl = st.columns(2)
-            keterampilan_lapangan = []
-            _slug = jenis_cv.replace(" ", "_").replace("/", "_")
-            for i, ket in enumerate(pilihan_keterampilan_lapangan):
-                with kolkl[i % 2]:
-                    if st.checkbox(ket, key=f"cv_ket_{_slug}_{i}"):
-                        keterampilan_lapangan.append(ket)
-            keterampilan_manual = st.text_input(
-                "Lainnya (pisahkan dengan koma)",
-                key=f"cv_ket_{_slug}_manual",
-            )
-            if keterampilan_manual.strip():
-                keterampilan_lapangan += [
-                    k.strip() for k in keterampilan_manual.split(",") if k.strip()
-                ]
-
-            st.markdown(f"### {judul_pengalaman}")
-            st.caption("Klik baris terakhir untuk menambah data.")
-            st.session_state.pengalaman_lapangan = st.data_editor(
-                st.session_state.pengalaman_lapangan,
-                num_rows="dynamic", width="stretch",
-                key="ed_pengalaman_lapangan",
-                column_config={
-                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-                },
-            )
-
-            bidang_keahlian = []
-            publikasi_bersih = []
-            lisensi_jenis = lisensi_nomor = lisensi_level = ""
-            lisensi_terbit = lisensi_berlaku = None
-            medis_nomor = medis_penerbit = ""
-            medis_terbit = medis_berlaku = None
-            total_jam_selam = 0
-            keahlian_selam = []
-
-        else:
-            st.markdown("### 🔬 Bidang Keahlian")
-            bidang_pilih = st.multiselect(
-                "Pilih bidang keahlian", BIDANG_KEAHLIAN_PILIHAN,
-                key="cv_bidang_pilih",
-            )
-            bidang_manual = st.text_input(
-                "Bidang keahlian lainnya (pisahkan dengan koma)",
-                key="cv_bidang_manual",
-            )
-            bidang_keahlian = list(bidang_pilih)
-            if bidang_manual.strip():
-                bidang_keahlian += [
-                    b.strip() for b in bidang_manual.split(",") if b.strip()
-                ]
-
-            lisensi_jenis = lisensi_nomor = lisensi_level = ""
-            lisensi_terbit = lisensi_berlaku = None
-            medis_nomor = medis_penerbit = ""
-            medis_terbit = medis_berlaku = None
-            total_jam_selam = 0
-            keahlian_selam = []
-            pekerjaan_sehari_hari = ""
-            keterampilan_lapangan = []
-
-        # ---------------------------------------------------------------
-        # 5. SERTIFIKASI KOMPETENSI
-        # ---------------------------------------------------------------
-        judul_sertifikasi = "📜 Sertifikasi Kompetensi (opsional)"
-        st.markdown(f"### {judul_sertifikasi}")
-        st.session_state.sertifikasi = st.data_editor(
-            st.session_state.sertifikasi,
-            num_rows="dynamic", width="stretch", key="ed_sertifikasi",
-            column_config={
-                "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-            },
-        )
-
-        # ---------------------------------------------------------------
-        # 6. PENGALAMAN KERJA DAN PUBLIKASI (Tenaga Ahli/Pembantu Peneliti)
-        # ---------------------------------------------------------------
-        if ahli_atau_peneliti:
-            st.markdown("### 💼 Pengalaman Kerja")
-            st.caption("Klik baris terakhir untuk menambah data.")
-            st.session_state.pengalaman_kerja = st.data_editor(
-                st.session_state.pengalaman_kerja,
-                num_rows="dynamic", width="stretch",
-                key="ed_pengalaman_kerja",
-                column_config={
-                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-                },
-            )
-
-            st.markdown("### 📚 Publikasi Ilmiah (opsional)")
-            st.session_state.publikasi = st.data_editor(
-                st.session_state.publikasi,
-                num_rows="dynamic", width="stretch", key="ed_publikasi",
-                column_config={
-                    "Tahun": st.column_config.TextColumn("Tahun", width="small"),
-                },
-            )
-
-        # ---------------------------------------------------------------
-        # 6b. RINGKASAN KETERKAITAN DENGAN KEGIATAN
-        # ---------------------------------------------------------------
-        st.markdown("### 🔗 Ringkasan Keterkaitan dengan Kegiatan")
-        st.caption(
-            "Boleh dikosongkan — akan disusun otomatis dari data di atas saat "
-            "tombol Generate CV ditekan. Kolom ini tetap bisa disunting atau "
-            "ditulis manual sepenuhnya."
-        )
-        ringkasan_afiliasi = st.text_area(
-            "Ringkasan Keterkaitan dengan Kegiatan",
-            key="cv_ringkasan_afiliasi", height=140,
-            label_visibility="collapsed",
-            placeholder=(
-                "Kosongkan untuk dibuatkan draf otomatis, atau tulis sendiri "
-                "di sini."
-            ),
-        )
-
-        # ---------------------------------------------------------------
-        # 7. PERNYATAAN DAN TANDA TANGAN
-        # ---------------------------------------------------------------
-        st.markdown("### ✍️ Pernyataan dan Tanda Tangan")
-        st.info(
-            "Demikian daftar riwayat hidup ini saya buat dengan sebenar-benarnya "
-            "untuk dapat dipergunakan sebagaimana mestinya."
-        )
-        kolt1, kolt2, kolt3 = st.columns(3)
-        with kolt1:
-            tempat_ttd = st.text_input("Tempat", value="Bitung", key="cv_tempat_ttd")
-        with kolt2:
-            tanggal_ttd = st.date_input(
-                "Tanggal", value=date.today(), format="DD/MM/YYYY",
-                key="cv_tanggal_ttd",
-            )
-        with kolt3:
-            nama_terang = st.text_input(
-                "Nama Terang", key="cv_nama_terang",
-                help="Kosongkan untuk memakai nama lengkap di atas.",
-            )
-
-        # ---------------------------------------------------------------
-        # 8. TOMBOL GENERATE
-        # ---------------------------------------------------------------
-        st.markdown("---")
-        tekan_generate = st.form_submit_button(
-            "⚡ Generate CV", type="primary", width="stretch",
-        )
-
-    # =====================================================================
-    # PEMROSESAN SETELAH FORM DIKIRIM
-    # =====================================================================
-    if tekan_generate:
-        pendidikan_bersih = bersihkan_tabel(st.session_state.pendidikan)
-        sertifikasi_bersih = bersihkan_tabel(st.session_state.sertifikasi)
-        kerja_bersih = bersihkan_tabel(st.session_state.pengalaman_kerja)
-        selam_bersih = bersihkan_tabel(st.session_state.pengalaman_selam)
-        publikasi_bersih = bersihkan_tabel(st.session_state.publikasi)
-        lapangan_bersih = bersihkan_tabel(st.session_state.pengalaman_lapangan)
-
-        if penyelam:
-            pengalaman_untuk_draf = selam_bersih
-        elif lapangan:
-            pengalaman_untuk_draf = lapangan_bersih
-        else:
-            pengalaman_untuk_draf = kerja_bersih
-        keahlian_untuk_draf = keterampilan_lapangan if lapangan else bidang_keahlian
-        medis_masih_berlaku = bool(
-            penyelam and medis_berlaku and medis_berlaku >= date.today()
-        )
-
-        # Susun draf otomatis hanya bila kolom ringkasan masih kosong
-        perlu_perbarui_kotak_ringkasan = False
-        if not ringkasan_afiliasi.strip():
-            ringkasan_afiliasi = utils.buat_draf_afiliasi(
-                nama=nama, jenis_cv=jenis_cv,
-                peran_tim=peran_tim, peran_teknis=peran_teknis,
-                pekerjaan_sehari_hari=pekerjaan_sehari_hari if lapangan else "",
-                pendidikan=pendidikan_bersih,
-                bidang_keahlian=keahlian_untuk_draf,
-                sertifikasi=sertifikasi_bersih,
-                pengalaman=pengalaman_untuk_draf, publikasi=publikasi_bersih,
-                keahlian_selam=keahlian_selam,
-                total_jam_selam=int(total_jam_selam) if penyelam else 0,
-                lisensi_jenis=lisensi_jenis if penyelam else "",
-                lisensi_level=lisensi_level if penyelam else "",
-                medis_masih_berlaku=medis_masih_berlaku,
-            )
-            perlu_perbarui_kotak_ringkasan = True
-
-        # Catatan kekurangan bersifat informasional saja — TIDAK memblokir
-        catatan = catat_kekurangan_cv(
-            nama=nama, tempat_lahir=tempat_lahir,
-            jenis_kelamin=jenis_kelamin, agama=agama, nomor_ktp=nomor_ktp,
-            email=email,
-        )
-
-        data = CVData(
-            jenis_cv=jenis_cv,
-            nama=nama, tempat_lahir=tempat_lahir,
-            tanggal_lahir=tanggal_lahir, jenis_kelamin=jenis_kelamin,
-            agama=agama, kewarganegaraan=kewarganegaraan, alamat=alamat,
-            telepon=telepon, email=email, nomor_ktp=nomor_ktp, npwp=npwp,
-            nip=nip, nidn=nidn, jabatan=jabatan, afiliasi=afiliasi,
-            peran_tim=peran_tim, peran_teknis=peran_teknis,
-            pendidikan=pendidikan_bersih,
-            sertifikasi=sertifikasi_bersih,
-            pengalaman_kerja=kerja_bersih,
-            publikasi=publikasi_bersih,
-            bidang_keahlian=bidang_keahlian,
-            lisensi_jenis=lisensi_jenis, lisensi_nomor=lisensi_nomor,
-            lisensi_level=lisensi_level, lisensi_terbit=lisensi_terbit,
-            lisensi_berlaku=lisensi_berlaku,
-            medis_nomor=medis_nomor, medis_penerbit=medis_penerbit,
-            medis_terbit=medis_terbit, medis_berlaku=medis_berlaku,
-            total_jam_selam=int(total_jam_selam),
-            keahlian_selam=keahlian_selam,
-            pengalaman_selam=selam_bersih,
-            pekerjaan_sehari_hari=pekerjaan_sehari_hari,
-            keterampilan_lapangan=keterampilan_lapangan,
-            pengalaman_lapangan=lapangan_bersih,
-            tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
-            nama_terang=nama_terang,
-            ringkasan_afiliasi=ringkasan_afiliasi,
-            foto=(st.session_state.berkas_foto.getvalue()
-                  if st.session_state.berkas_foto else None),
-            lampiran=susun_lampiran(),
-        )
-
-        with st.spinner("Menyusun dokumen CV beserta lampiran..."):
-            try:
-                st.session_state.hasil_cv_pdf = generate_cv_pdf(data)
-                st.session_state.hasil_cv_docx = generate_cv_docx(data)
-                st.session_state.data_cv_terakhir = data
-                st.session_state.cv_catatan_kekurangan = catatan
-            except Exception as e:
-                st.session_state.hasil_cv_pdf = None
-                st.session_state.hasil_cv_docx = None
-                st.error(f"Terjadi kesalahan saat menyusun dokumen: {e}")
-
-        # Kotak Ringkasan Keterkaitan tidak boleh ditulis langsung di sini
-        # (widget-nya sudah dirender di form pada eksekusi skrip yang sama).
-        # Simpan sebagai nilai tertunda lalu jalankan ulang skrip sekali —
-        # pada eksekusi berikutnya nilai ini diterapkan SEBELUM widget
-        # dibuat, sehingga aman dan langsung terlihat di kotak teks.
-        if perlu_perbarui_kotak_ringkasan:
-            st.session_state["_draf_ringkasan_tertunda"] = ringkasan_afiliasi
-            st.rerun()
-
-    # ---------------------------------------------------------------
-    # 9. PRATINJAU DAN UNDUHAN
-    # ---------------------------------------------------------------
-    if st.session_state.hasil_cv_pdf:
-        with wadah_pengingat:
-            catatan = st.session_state.get("cv_catatan_kekurangan", [])
-            if catatan:
-                pesan = ", ".join(catatan)
-                st.info(
-                    f"Dokumen berhasil dibuat. Kolom berikut masih kosong dan "
-                    f"bisa dilengkapi kapan saja: {pesan}."
-                )
-
-        st.success("Dokumen CV berhasil disusun.")
-        data = st.session_state.data_cv_terakhir
-        tampilkan_pratinjau_cv(data)
-
-        nama_unduh = nama_berkas_aman(data.nama, "CV")
-        kolu1, kolu2 = st.columns(2)
-        with kolu1:
-            st.download_button(
-                "⬇️ Download CV (PDF)",
-                data=st.session_state.hasil_cv_pdf,
-                file_name=f"{nama_unduh}.pdf",
-                mime="application/pdf",
-                width="stretch",
-            )
-        with kolu2:
-            st.download_button(
-                "⬇️ Download CV (Word)",
-                data=st.session_state.hasil_cv_docx,
-                file_name=f"{nama_unduh}.docx",
-                mime=("application/vnd.openxmlformats-officedocument."
-                      "wordprocessingml.document"),
-                width="stretch",
-            )
-
-def catat_kekurangan_cv(**k) -> list:
-    """Mencatat kolom penting yang masih kosong sebagai catatan informasional.
-
-    Fungsi ini TIDAK PERNAH memblokir pembuatan dokumen — dokumen tetap
-    dihasilkan berapa pun kelengkapan datanya. Daftar yang dikembalikan
-    hanya ditampilkan sebagai pengingat halus setelah dokumen jadi, agar
-    pengguna tahu bagian mana yang masih bisa dilengkapi kemudian.
-    """
-    catatan = []
-
-    if not k["nama"].strip():
-        catatan.append("Nama Lengkap")
-    if not k["tempat_lahir"].strip():
-        catatan.append("Tempat Lahir")
-    if not k["jenis_kelamin"]:
-        catatan.append("Jenis Kelamin")
-    if not k["agama"]:
-        catatan.append("Agama")
-
-    email = k["email"].strip()
-    if email and ("@" not in email or "." not in email.split("@")[-1]):
-        catatan.append("Format Email (periksa kembali)")
-
-    nik = k["nomor_ktp"].strip()
-    if nik and not (nik.isdigit() and len(nik) == 16):
-        catatan.append("Nomor KTP (NIK) — harus 16 digit angka")
-
-    if not st.session_state.berkas_foto:
-        catatan.append("Pas Foto 3x4 (belum diunggah)")
-    if not st.session_state.berkas_ktp:
-        catatan.append("Scan KTP (belum diunggah)")
-
-    return catatan
-
-
-def tampilkan_pratinjau_cv(data: CVData):
-    """Menampilkan pratinjau ringkas isi dokumen sebelum diunduh."""
-    with st.expander("🔍 Pratinjau isi dokumen", expanded=True):
-        kol1, kol2 = st.columns([1, 3])
-
-        with kol1:
-            if data.foto:
-                st.image(utils.potong_pas_foto(data.foto), width=110)
-
-        with kol2:
-            st.markdown(f"**{data.nama}**")
-            st.caption(f"{data.jenis_cv} · {data.ttl()}")
-            if data.peran_tim:
-                st.caption(f"Peran: {data.peran_tim}")
-
-        ringkas = {
-            "Nomor KTP (NIK)": data.nomor_ktp,
-            "Alamat": data.alamat,
-            "Telepon": data.telepon,
-            "Email": data.email,
-        }
-        st.table(pd.DataFrame(
-            [{"Keterangan": k, "Isi": v} for k, v in ringkas.items()]
-        ).set_index("Keterangan"))
-
-        kolr1, kolr2, kolr3 = st.columns(3)
-        kolr1.metric("Baris Pendidikan", len(data.pendidikan))
-        if data.adalah_penyelam():
-            kolr2.metric("Pengalaman Selam", len(data.pengalaman_selam))
-            kolr3.metric("Total Jam Selam", f"{data.total_jam_selam} jam")
-        elif data.adalah_lapangan():
-            kolr2.metric("Pengalaman Lapangan", len(data.pengalaman_lapangan))
-            kolr3.metric("Keterampilan", len(data.keterampilan_lapangan))
-        else:
-            kolr2.metric("Pengalaman Kerja", len(data.pengalaman_kerja))
-            kolr3.metric("Publikasi", len(data.publikasi))
-
-        st.markdown("**Halaman lampiran yang akan disisipkan:**")
-        if data.lampiran:
-            for i, lam in enumerate(data.lampiran, start=1):
-                st.markdown(f"- Lampiran {i} — {lam.judul} (`{lam.nama_berkas}`)")
-        else:
-            st.caption("Tidak ada lampiran.")
-
-        if data.ringkasan_afiliasi.strip():
-            st.markdown("**Ringkasan Keterkaitan dengan Kegiatan:**")
-            st.caption(data.ringkasan_afiliasi)
-
-
-# =====================================================================
-# HALAMAN 2 — GENERATOR SURAT TUGAS DINAS LUAR
-# =====================================================================
-
-def halaman_surat_tugas():
-    """Menampilkan halaman form dan pembuatan Surat Tugas Dinas Luar."""
-    st.markdown("## ✉️ Generator Surat Tugas Dinas Luar")
-    st.info(
-        "Surat otomatis menyertakan klausul pembebasan tugas mengajar dan "
-        "larangan rangkap bayar sesuai Diktum KETUJUH SK Dekan. Surat dapat "
-        "diterbitkan untuk satu orang maupun satu tim sekaligus. Semua "
-        "kolom boleh dikosongkan bila belum ada datanya."
-    )
-
-    wadah_pengingat = st.container()
-
-    with st.form("form_st", clear_on_submit=False):
-        st.markdown("### 📋 Identitas Surat")
-        kol1, kol2 = st.columns(2)
-        with kol1:
-            nomor_surat = st.text_input(
-                "Nomor Surat", value="800/     /UN12.6/TU.00.00/2026",
-                key="st_nomor",
-                help="Contoh format: 800/1234/UN12.6/TU.00.00/2026",
-            )
-        with kol2:
-            unit_kerja = st.text_input(
-                "Unit Kerja",
-                value="Fakultas Perikanan dan Ilmu Kelautan, "
-                      "Universitas Sam Ratulangi",
-                key="st_unit_kerja",
-            )
-
-        st.markdown("### 👥 Personil yang Ditugaskan")
-        st.caption(
-            "Isi satu baris untuk penugasan perorangan, atau beberapa baris "
-            "untuk penugasan tim."
-        )
-        st.session_state.personil_st = st.data_editor(
-            st.session_state.personil_st,
-            num_rows="dynamic", width="stretch", key="ed_personil_st",
-            column_config={
-                "Peran dalam Tim": st.column_config.SelectboxColumn(
-                    "Peran dalam Tim", options=PERAN_TIM_PILIHAN,
-                ),
-            },
-        )
-
-        st.markdown("### 🗺️ Rincian Penugasan")
-        kolr1, kolr2 = st.columns(2)
-        with kolr1:
-            jenis_tugas = st.text_input(
-                "Jenis Tugas", value="Survei Awal Ekologi dan Pemetaan Dasar",
-                key="st_jenis_tugas",
-            )
-        with kolr2:
-            lokasi = st.text_input(
-                "Lokasi Tugas",
-                value="Pelabuhan Perikanan Samudera (PPS) Bitung, Sulawesi Utara",
-                key="st_lokasi",
-            )
-
-        kolw1, kolw2, kolw3 = st.columns(3)
-        with kolw1:
-            tanggal_mulai = st.date_input(
-                "Tanggal Mulai", value=date(2026, 9, 15),
-                format="DD/MM/YYYY", key="st_tanggal_mulai",
-            )
-        with kolw2:
-            tanggal_selesai = st.date_input(
-                "Tanggal Selesai", value=date(2026, 9, 16),
-                format="DD/MM/YYYY", key="st_tanggal_selesai",
-            )
-        with kolw3:
-            jumlah_hari = st.number_input(
-                "Jumlah Hari Kerja", min_value=1, max_value=60, value=2,
-                key="st_jumlah_hari",
-            )
-
-        st.markdown("### ⚙️ Klausul dan Penanda Tangan")
-        kolk1, kolk2, kolk3 = st.columns(3)
-        with kolk1:
-            klaim_8_oj = st.checkbox(
-                "Aktifkan klausul 8 OJ/hari",
-                key="st_klaim_8oj",
-                help="Hanya berlaku bila terdapat personil berperan Pembantu Peneliti.",
-            )
-        with kolk2:
-            tempat_ttd = st.text_input("Tempat Tanda Tangan", value="Manado",
-                                       key="st_tempat_ttd")
-        with kolk3:
-            tanggal_ttd = st.date_input(
-                "Tanggal Surat", value=date.today(), format="DD/MM/YYYY",
-                key="st_tanggal_ttd",
-            )
-
-        st.markdown("---")
-        tekan = st.form_submit_button(
-            "✉️ Generate Surat Tugas", type="primary", width="stretch",
-        )
-
-    if tekan:
-        personil = bersihkan_tabel(st.session_state.personil_st)
-
-        # Catatan informasional saja — TIDAK memblokir pembuatan surat
-        catatan = []
-        if not nomor_surat.strip() or "     " in nomor_surat:
-            catatan.append("Nomor Surat")
-        if not personil:
-            catatan.append("Daftar Personil")
-        if not jenis_tugas.strip():
-            catatan.append("Jenis Tugas")
-        if not lokasi.strip():
-            catatan.append("Lokasi Tugas")
-        if tanggal_selesai < tanggal_mulai:
-            catatan.append(
-                "Tanggal Selesai (lebih awal dari Tanggal Mulai — periksa kembali)"
-            )
-
-        data_st = DataSuratTugas(
-            nomor_surat=nomor_surat, personil=personil,
-            unit_kerja=unit_kerja, jenis_tugas=jenis_tugas, lokasi=lokasi,
-            tanggal_mulai=tanggal_mulai, tanggal_selesai=tanggal_selesai,
-            jumlah_hari=int(jumlah_hari), klaim_8_oj=klaim_8_oj,
-            tempat_ttd=tempat_ttd, tanggal_ttd=tanggal_ttd,
-        )
-        with st.spinner("Menyusun Surat Tugas..."):
-            try:
-                st.session_state.hasil_st_pdf = generate_st_dinas_luar_pdf(data_st)
-                st.session_state.hasil_st_docx = generate_st_dinas_luar(data_st)
-                st.session_state.st_catatan_kekurangan = catatan
-            except Exception as e:
-                st.session_state.hasil_st_pdf = None
-                st.session_state.hasil_st_docx = None
-                st.error(f"Terjadi kesalahan saat menyusun surat: {e}")
-
-    if st.session_state.hasil_st_pdf:
-        with wadah_pengingat:
-            catatan = st.session_state.get("st_catatan_kekurangan", [])
-            if catatan:
-                pesan = ", ".join(catatan)
-                st.info(
-                    f"Surat berhasil dibuat. Kolom berikut sebaiknya "
-                    f"diperiksa kembali: {pesan}."
-                )
-
-        st.success("Surat Tugas berhasil disusun.")
-        personil = bersihkan_tabel(st.session_state.personil_st)
-        nama_utama = personil[0].get("Nama", "Tim") if personil else "Tim"
-        akhiran = "Tim" if len(personil) > 1 else nama_utama
-        nama_unduh = nama_berkas_aman(akhiran, "ST_Dinas_Luar")
-
-        kolu1, kolu2 = st.columns(2)
-        with kolu1:
-            st.download_button(
-                "⬇️ Download Surat Tugas (PDF)",
-                data=st.session_state.hasil_st_pdf,
-                file_name=f"{nama_unduh}.pdf",
-                mime="application/pdf",
-                width="stretch",
-            )
-        with kolu2:
-            st.download_button(
-                "⬇️ Download Surat Tugas (Word)",
-                data=st.session_state.hasil_st_docx,
-                file_name=f"{nama_unduh}.docx",
-                mime=("application/vnd.openxmlformats-officedocument."
-                      "wordprocessingml.document"),
-                width="stretch",
-            )
-
-# =====================================================================
-# HALAMAN 3 — PANDUAN PENGGUNAAN
-# =====================================================================
-
-def halaman_panduan():
-    """Menampilkan panduan singkat penggunaan aplikasi."""
-    st.markdown("## ℹ️ Panduan Penggunaan")
-
-    st.markdown("### Dokumen yang wajib disiapkan")
-    st.table(pd.DataFrame([
-        {"Dokumen": "Pas Foto 3x4", "Format": "JPG, PNG",
-         "Maks": "2 MB", "Wajib": "Ya"},
-        {"Dokumen": "KTP", "Format": "JPG, PNG, PDF",
-         "Maks": "2 MB", "Wajib": "Ya"},
-        {"Dokumen": "License Menyelam SCUBA", "Format": "JPG, PNG, PDF",
-         "Maks": "5 MB", "Wajib": "Ya"},
-        {"Dokumen": "Sertifikat Lainnya", "Format": "JPG, PNG, PDF",
-         "Maks": "5 MB per berkas (maks 10 berkas)", "Wajib": "Tidak"},
-    ]).set_index("Dokumen"))
-
-    st.markdown("### Langkah pembuatan CV")
-    st.markdown(
-        "1. Pilih jenis CV: **Tenaga Ahli** atau **Tenaga Spesialis Penyelaman**.\n"
-        "2. Isi seluruh data pribadi bertanda bintang (*).\n"
-        "3. Unggah keempat dokumen persyaratan pada bagian Upload Dokumen.\n"
-        "4. Lengkapi tabel pendidikan, sertifikasi, dan pengalaman.\n"
-        "5. Periksa blok pernyataan dan tanda tangan.\n"
-        "6. Tekan **Generate CV**, periksa pratinjau, lalu unduh PDF atau Word."
-    )
-
-    st.markdown("### Catatan penting")
-    st.warning(
-        "Nomor KTP yang diisi pada form harus sama persis dengan nomor yang "
-        "tertera pada scan KTP yang diunggah. Ketidaksesuaian akan menyebabkan "
-        "dokumen ditolak pada tahap verifikasi administrasi."
-    )
-    st.info(
-        "Lampiran berformat PDF hanya dapat ditampilkan utuh pada berkas "
-        "keluaran PDF. Pada berkas Word, lampiran PDF hanya dicatat sebagai "
-        "keterangan rujukan, sedangkan lampiran gambar tetap disisipkan."
-    )
-
-    st.markdown("### Spesifikasi dokumen keluaran")
-    st.markdown(
-        "- Ukuran kertas A4 potret\n"
-        "- Margin: atas 2,5 cm · bawah 2,5 cm · kiri 3 cm · kanan 2 cm\n"
-        "- Huruf Times New Roman 12 pt untuk isi, 14 pt tebal untuk judul\n"
-        "- Lampiran disisipkan sebagai halaman terpisah dengan judul jelas"
-    )
-
-
-# =====================================================================
-# NAVIGASI UTAMA
-# =====================================================================
-
-def main():
-    """Menjalankan aplikasi: menampilkan kepala, sidebar, dan halaman aktif."""
-    if not periksa_kata_sandi():
-        st.stop()
-
-    tampilkan_kepala()
-
-    with st.sidebar:
-        if logo_tersedia():
-            st.image(LOGO_PATH, width=90)
-        st.markdown("### Menu Navigasi")
-        halaman = st.radio(
-            "Pilih halaman",
-            ["Generator CV", "Generator Surat Tugas", "Panduan Penggunaan"],
-            label_visibility="collapsed",
-            key="menu_navigasi",
-        )
-
-        st.markdown("---")
-        st.markdown("### Status Dokumen")
-        status = [
-            ("Pas Foto 3x4", st.session_state.berkas_foto is not None),
-            ("KTP", st.session_state.berkas_ktp is not None),
-            ("License Selam", st.session_state.berkas_lisensi is not None),
-            ("Sertifikat Lainnya",
-             len(st.session_state.berkas_sertifikat) > 0),
-        ]
-        for label, ada in status:
-            st.markdown(f"{'✅' if ada else '⬜'} {label}")
-
-        st.markdown("---")
-        if st.button("🔄 Reset Seluruh Form", width="stretch"):
-            for kunci in list(st.session_state.keys()):
-                del st.session_state[kunci]
-            st.rerun()
-
-        if hasattr(st, "secrets") and st.secrets.get("APP_PASSWORD", None):
-            st.markdown("---")
-            if st.button("🔒 Keluar", width="stretch"):
-                st.session_state.sudah_login = False
-                st.rerun()
-
-        st.markdown("---")
-        st.caption(
-            "Generator Dokumen Tim Pelaksana Swakelola\n\n"
-            "FPIK UNSRAT — Tahun Anggaran 2026"
-        )
-
-    if halaman == "Generator CV":
-        halaman_cv()
-    elif halaman == "Generator Surat Tugas":
-        halaman_surat_tugas()
-    else:
-        halaman_panduan()
-
+    # ── B. UPLOAD DOKUMEN ──────────────────────────────
+    st.markdown('<div class="section-hdr">📎 B. Upload Dokumen Pendukung</div>',
+                unsafe_allow_html=True)
+    st.markdown("""
+    <div class="info-karang">
+        Foto, KTP, dan Lisensi Selam <b>wajib</b> diupload sebelum CV dapat di-generate.
+        File lampiran akan disisipkan ke dokumen PDF output.
+    </div>
+    """, unsafe_allow_html=True)
+
+    uc1, uc2 = st.columns(2)
+
+    with uc1:
+        # 1. PAS FOTO
+        st.markdown('<div class="up-label">📸 Pas Foto 3×4 <span class="up-req">* Wajib</span></div>',
+                    unsafe_allow_html=True)
+        foto_f = st.file_uploader("JPG/PNG, maks 2 MB", type=["jpg","jpeg","png"],
+                                   key="up_foto", label_visibility="collapsed")
+        if foto_f and cek_ukuran(foto_f, 2):
+            st.session_state["foto_bytes"] = foto_f.getvalue()
+            st.session_state["foto_name"]  = foto_f.name
+        if st.session_state["foto_bytes"]:
+            preview_file(st.session_state["foto_bytes"],
+                         st.session_state.get("foto_name","foto.jpg"), "Foto tersimpan")
+
+    with uc2:
+        # 2. KTP
+        st.markdown('<div class="up-label">🪪 Scan KTP <span class="up-req">* Wajib</span></div>',
+                    unsafe_allow_html=True)
+        ktp_f = st.file_uploader("JPG/PNG/PDF, maks 2 MB", type=["jpg","jpeg","png","pdf"],
+                                  key="up_ktp", label_visibility="collapsed")
+        if ktp_f and cek_ukuran(ktp_f, 2):
+            st.session_state["ktp_bytes"] = ktp_f.getvalue()
+            st.session_state["ktp_name"]  = ktp_f.name
+        if st.session_state["ktp_bytes"]:
+            preview_file(st.session_state["ktp_bytes"],
+                         st.session_state.get("ktp_name","ktp.jpg"), "KTP tersimpan")
+
+    uc3, uc4 = st.columns(2)
+
+    with uc3:
+        # 3. LISENSI SELAM
+        st.markdown('<div class="up-label">🤿 Lisensi Menyelam SCUBA <span class="up-req">* Wajib</span></div>',
+                    unsafe_allow_html=True)
+        st.caption("PADI · SSI · CMAS · POSSI · TNI-AL · lainnya")
+        lis_f = st.file_uploader("JPG/PNG/PDF, maks 5 MB", type=["jpg","jpeg","png","pdf"],
+                                  key="up_lis", label_visibility="collapsed")
+        if lis_f and cek_ukuran(lis_f, 5):
+            st.session_state["lis_bytes"] = lis_f.getvalue()
+            st.session_state["lis_name"]  = lis_f.name
+        if st.session_state["lis_bytes"]:
+            preview_file(st.session_state["lis_bytes"],
+                         st.session_state.get("lis_name","lisensi.jpg"), "Lisensi tersimpan")
+
+    with uc4:
+        # 4. SERTIFIKAT LAINNYA
+        st.markdown('<div class="up-label">📜 Sertifikat Lainnya <span class="up-opt">(opsional, maks 10 file)</span></div>',
+                    unsafe_allow_html=True)
+        st.caption("BNSP · Fit to Dive · Pelatihan · dll.")
+        sert_fs = st.file_uploader("JPG/PNG/PDF, maks 5 MB/file", type=["jpg","jpeg","png","pdf"],
+                                    accept_multiple_files=True, key="up_sert",
+                                    label_visibility="collapsed")
+        if sert_fs:
+            if len(sert_fs) > 10:
+                st.error("⚠️ Maksimal 10 file sertifikat.")
+                sert_fs = sert_fs[:10]
+            ok = [{"bytes": s.getvalue(), "name": s.name}
+                  for s in sert_fs if cek_ukuran(s, 5)]
+            if ok:
+                st.session_state["sert_list"] = ok
+                st.caption(f"✅ {len(ok)} sertifikat tersimpan")
+
+    # ── C. PENDIDIKAN ──────────────────────────────────
+    st.markdown('<div class="section-hdr">🎓 C. Riwayat Pendidikan</div>', unsafe_allow_html=True)
+    st.caption("Format: **Jenjang | Institusi | Bidang Studi | Tahun** — satu baris per jenjang")
+    pendidikan = st.text_area("Pendidikan *", value=st.session_state["d_pendidikan"],
+                               height=130, label_visibility="collapsed")
+
+    # ── D. RESTORASI ───────────────────────────────────
+    st.markdown('<div class="section-hdr">🌊 D. Kepakaran: Restorasi Terumbu Karang</div>',
+                unsafe_allow_html=True)
+    st.caption("Format: **Lokasi | Metode | Periode | Mitra/Pemberi Kerja** — satu baris per kegiatan")
+    restorasi = st.text_area("Restorasi", value=st.session_state["d_restorasi"],
+                              height=200, label_visibility="collapsed")
+
+    # ── E. SERTIFIKASI SELAM ───────────────────────────
+    st.markdown('<div class="section-hdr">🤿 E. Sertifikasi & Pengalaman Selam</div>',
+                unsafe_allow_html=True)
+    st.caption("Satu item per baris")
+    sertifikasi = st.text_area("Sertifikasi", value=st.session_state["d_sertifikasi"],
+                                height=140, label_visibility="collapsed")
+
+    # ── F. PENELITIAN ──────────────────────────────────
+    st.markdown('<div class="section-hdr">🔬 F. Pengalaman Penelitian (5 Tahun Terakhir)</div>',
+                unsafe_allow_html=True)
+    st.caption("Format: **Tahun | Judul Penelitian | Sumber Dana**")
+    penelitian = st.text_area("Penelitian", value=st.session_state["d_penelitian"],
+                               height=200, label_visibility="collapsed")
+
+    # ── G. PUBLIKASI ───────────────────────────────────
+    st.markdown('<div class="section-hdr">📚 G. Publikasi Ilmiah Terpilih</div>',
+                unsafe_allow_html=True)
+    st.caption("Format: **Tahun | Judul | Jurnal/Penerbit | Indeks**")
+    publikasi = st.text_area("Publikasi", value=st.session_state["d_publikasi"],
+                              height=180, label_visibility="collapsed")
+
+    # ── H. PENGABDIAN & KEBIJAKAN ─────────────────────
+    st.markdown('<div class="section-hdr">🤝 H. Pengabdian Masyarakat & Kebijakan Publik</div>',
+                unsafe_allow_html=True)
+    h1, h2 = st.columns(2)
+    with h1:
+        st.caption("Format: **Tahun | Kegiatan | Lokasi/Penyelenggara**")
+        pengabdian = st.text_area("Pengabdian", value=st.session_state["d_pengabdian"],
+                                   height=220, label_visibility="collapsed")
+    with h2:
+        st.caption("Format: **Tahun | Kegiatan | Lingkup Wilayah**")
+        kebijakan = st.text_area("Kebijakan", value=st.session_state["d_kebijakan"],
+                                  height=220, label_visibility="collapsed")
+
+    # ── I. KEAHLIAN ────────────────────────────────────
+    st.markdown('<div class="section-hdr">🛠️ I. Keahlian Inti</div>', unsafe_allow_html=True)
+    st.caption("Pisahkan dengan koma")
+    keahlian = st.text_input("Keahlian", value=st.session_state["d_keahlian"],
+                              label_visibility="collapsed")
+
+    # ── TOMBOL GENERATE ────────────────────────────────
     st.markdown("---")
-    st.caption(
-        "Generator Dokumen Tim Pelaksana Swakelola — "
-        "Fakultas Perikanan dan Ilmu Kelautan, Universitas Sam Ratulangi, 2026"
-    )
+    st.caption("*Field bertanda * wajib diisi. Upload Foto, KTP, dan Lisensi Selam wajib dilakukan.*")
+
+    if st.button("⚡ GENERATE CV — Dr. Ari Berty Rondonuwu",
+                 type="primary", use_container_width=True):
+
+        # --- Validasi ---
+        err = []
+        if not nama.strip():         err.append("Nama Lengkap")
+        if not ttl.strip():          err.append("Tempat, Tanggal Lahir")
+        if not jabatan.strip():      err.append("Jabatan Fungsional")
+        if not afiliasi.strip():     err.append("Institusi/Afiliasi")
+        if not alamat.strip():       err.append("Alamat Lengkap")
+        if not telepon.strip():      err.append("No. Telepon/HP")
+        if not email.strip():        err.append("Email Aktif")
+        if not peran_teknis.strip(): err.append("Peran Teknis")
+        if not pendidikan.strip():   err.append("Riwayat Pendidikan")
+        if not st.session_state.get("foto_bytes"): err.append("Pas Foto 3×4 (wajib upload)")
+        if not st.session_state.get("ktp_bytes"):  err.append("Scan KTP (wajib upload)")
+        if not st.session_state.get("lis_bytes"):  err.append("Lisensi Menyelam SCUBA (wajib upload)")
+
+        if err:
+            st.markdown(
+                '<div class="err-block"><b>❌ Lengkapi field berikut sebelum generate:</b><ul>'
+                + "".join(f"<li>{e}</li>" for e in err)
+                + "</ul></div>",
+                unsafe_allow_html=True
+            )
+        else:
+            # Simpan ke session_state
+            for key, val in [
+                ("d_nama", nama), ("d_nip", nip), ("d_nidn", nidn),
+                ("d_ttl", ttl), ("d_jabatan", jabatan), ("d_afiliasi", afiliasi),
+                ("d_alamat", alamat), ("d_telepon", telepon), ("d_email", email),
+                ("d_peran_tim", peran_tim), ("d_peran_teknis", peran_teknis),
+                ("d_pendidikan", pendidikan), ("d_restorasi", restorasi),
+                ("d_sertifikasi", sertifikasi), ("d_penelitian", penelitian),
+                ("d_publikasi", publikasi), ("d_pengabdian", pengabdian),
+                ("d_kebijakan", kebijakan), ("d_keahlian", keahlian),
+            ]:
+                st.session_state[key] = val.strip() if hasattr(val, "strip") else val
+
+            foto_b64 = None
+            if st.session_state["foto_bytes"]:
+                foto_b64 = base64.b64encode(st.session_state["foto_bytes"]).decode("utf-8")
+
+            data_cv = CVData(
+                nama=nama.strip(), jabatan=jabatan.strip(),
+                nip=nip.strip(), nidn=nidn.strip(), ttl=ttl.strip(),
+                alamat=alamat.strip(), email=email.strip(), telepon=telepon.strip(),
+                afiliasi=afiliasi.strip(),
+                pendidikan=pendidikan.strip(), peran_tim=peran_tim,
+                peran_teknis=peran_teknis.strip(),
+                penelitian=penelitian.strip(), publikasi=publikasi.strip(),
+                restorasi=restorasi.strip(), pengabdian=pengabdian.strip(),
+                kebijakan=kebijakan.strip(), keahlian=keahlian.strip(),
+                sertifikasi=sertifikasi.strip(), foto_b64=foto_b64,
+            )
+
+            with st.spinner("⏳ Menyusun dokumen CV... Mohon tunggu."):
+                try:
+                    docx_bytes = generate_cv_docx(data_cv)
+                    st.success("✅ CV berhasil disusun!")
+
+                    # Info lampiran
+                    lamp = []
+                    if st.session_state.get("ktp_bytes"):
+                        lamp.append(f"📋 Lampiran 1 — Scan KTP ({st.session_state.get('ktp_name','')})")
+                    if st.session_state.get("lis_bytes"):
+                        lamp.append(f"🤿 Lampiran 2 — Lisensi Selam ({st.session_state.get('lis_name','')})")
+                    for i, s in enumerate(st.session_state.get("sert_list", []), 3):
+                        lamp.append(f"📜 Lampiran {i} — {s['name']}")
+                    if lamp:
+                        st.info(
+                            "📎 **Dokumen lampiran perlu digabungkan ke PDF output:**\n\n"
+                            + "\n".join(lamp)
+                            + "\n\n_Gunakan Adobe Acrobat, SmallPDF, atau ILovePDF._"
+                        )
+
+                    nama_f = nama.strip().replace(" ", "_").replace(".", "").replace(",", "")
+                    st.download_button(
+                        label="⬇️ Unduh CV (.docx)",
+                        data=docx_bytes,
+                        file_name=f"CV_{nama_f}_Restorasi_Karang_PPS_Bitung_2026.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"❌ Gagal generate CV: {e}")
+                    st.exception(e)
 
 
-if __name__ == "__main__":
-    main()
+# ╔══════════════════════════════════════════════╗
+# ║       TAB 2 — SURAT TUGAS DINAS LUAR        ║
+# ╚══════════════════════════════════════════════╝
+with tab2:
+    st.markdown("""
+    <div class="info-karang">
+        ℹ️ Surat ini otomatis menyertakan klausul pembebasan tugas mengajar dan
+        larangan rangkap bayar sesuai Diktum KETUJUH SK Dekan FPIK UNSRAT.
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("st_form", clear_on_submit=False):
+        st.markdown('<div class="section-hdr">👤 Data Personil</div>', unsafe_allow_html=True)
+        s1, s2 = st.columns(2)
+        with s1:
+            st_nama    = st.text_input("Nama Personil *",
+                                       value="Dr. Ir. Ari Berty Rondonuwu, M.Sc., M.Si.")
+            st_nip     = st.text_input("NIP", value="196801291993031001")
+            st_jabatan = st.text_input("Jabatan *",
+                                       value="Lektor Kepala (Penata) / Dosen FPIK UNSRAT")
+        with s2:
+            st_peran  = st.selectbox("Peran dalam Tim *",
+                                     ["Ketua Tim Pelaksana", "Anggota Tim Pelaksana", "Pembantu Peneliti"])
+            st_jenis  = st.text_input("Jenis Tugas *",
+                                      value="Survei Ekologi Awal dan Pemetaan Habitat Terumbu Karang")
+            st_lokasi = st.text_input("Lokasi Tugas *",
+                                      value="Pelabuhan Perikanan Samudera (PPS) Bitung, Kota Bitung, Sulawesi Utara")
+
+        st.markdown('<div class="section-hdr">📅 Periode Penugasan</div>', unsafe_allow_html=True)
+        d1, d2, d3 = st.columns(3)
+        with d1: tgl_mulai   = st.date_input("Tanggal Mulai *",   value=date(2026, 9, 15))
+        with d2: tgl_selesai = st.date_input("Tanggal Selesai *", value=date(2026, 9, 16))
+        with d3: jml_hari    = st.number_input("Jumlah Hari *", min_value=1, max_value=30, value=2)
+
+        st.markdown('<div class="section-hdr">📋 Nomor Surat</div>', unsafe_allow_html=True)
+        st_nomor = st.text_input("Nomor Surat *", value="800/.../FPIK-UNSRAT/2026")
+
+        st.markdown('<div class="section-hdr">⚙️ Klausul Khusus</div>', unsafe_allow_html=True)
+        klaim_8_oj = st.checkbox("Aktifkan Klausul 8 OJ/hari (Khusus Pembantu Peneliti)", value=False)
+
+        submit_st = st.form_submit_button(
+            "✉️ Generate Surat Tugas Dinas Luar", type="primary", use_container_width=True
+        )
+
+    if submit_st:
+        data_st = DataSuratTugas(
+            nomor_surat=st_nomor,
+            nama=st_nama, nip=st_nip, jabatan=st_jabatan,
+            peran_tim=st_peran, jenis_tugas=st_jenis, lokasi=st_lokasi,
+            tanggal_mulai=tgl_mulai, tanggal_selesai=tgl_selesai,
+            jumlah_hari=jml_hari, klaim_8_oj=klaim_8_oj,
+        )
+        with st.spinner("⏳ Menyusun Surat Tugas Dinas Luar..."):
+            try:
+                st_bytes = generate_st_dinas_luar(data_st)
+                st.success("✅ Surat Tugas berhasil disusun!")
+                nama_f_st = st_nama.replace(" ", "_").replace(".", "").replace(",", "")
+                st.download_button(
+                    label="⬇️ Unduh Surat Tugas (.docx)",
+                    data=st_bytes,
+                    file_name=f"ST_DL_{nama_f_st}_PPS_Bitung_2026.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"❌ Gagal generate Surat Tugas: {e}")
+                st.exception(e)
+
+
+# ===================== FOOTER =====================
+st.markdown("---")
+st.caption(
+    "🌊 Generator Dokumen Tim Pelaksana Swakelola — "
+    "Restorasi Terumbu Karang PPS Bitung TA 2026 — "
+    "FPIK Universitas Sam Ratulangi | v3.0"
+)
