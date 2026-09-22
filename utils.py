@@ -177,12 +177,19 @@ def dimensi_gambar(data_gambar: bytes) -> Tuple[int, int]:
         return (0, 0)
 
 
-def potong_pas_foto(data_gambar: bytes) -> bytes:
+def potong_pas_foto(data_gambar: bytes) -> Optional[bytes]:
     """Memotong gambar menjadi rasio 3:4 (pas foto) dengan pemotongan tengah.
 
     Digunakan agar pas foto pada CV selalu proporsional meskipun berkas
     yang diunggah memiliki rasio berbeda.
+
+    Mengembalikan None jika data bukan gambar yang bisa dibaca PIL (misalnya
+    PDF atau berkas rusak), sehingga pemanggil dapat menampilkan pesan
+    alternatif daripada meneruskan bytes mentah ke st.image() yang akan crash.
     """
+    # Tolak segera jika magic bytes menunjukkan PDF
+    if not data_gambar or data_gambar[:4] == b"%PDF":
+        return None
     try:
         img = Image.open(io.BytesIO(data_gambar))
         img = ImageOps.exif_transpose(img)
@@ -205,7 +212,9 @@ def potong_pas_foto(data_gambar: bytes) -> bytes:
         img.save(keluaran, format="JPEG", quality=90)
         return keluaran.getvalue()
     except Exception:
-        return normalisasi_gambar(data_gambar)
+        # Kembalikan None agar pemanggil tidak meneruskan bytes mentah
+        # ke st.image() — itu yang menyebabkan PIL.UnidentifiedImageError
+        return normalisasi_gambar(data_gambar) or None
 
 
 # =====================================================================
