@@ -1140,7 +1140,17 @@ def tampilkan_pratinjau_cv(data: CVData):
 
         with kol1:
             if data.foto:
-                st.image(utils.potong_pas_foto(data.foto), width=110)
+                # Jaga-jaga: foto bisa saja berisi PDF bytes (misalnya file
+                # PDF yang diunggah dengan ekstensi .jpg). Cek magic bytes
+                # sebelum memanggil st.image() agar tidak crash.
+                foto_bytes = utils.potong_pas_foto(data.foto)
+                if foto_bytes:
+                    try:
+                        st.image(foto_bytes, width=110)
+                    except Exception:
+                        st.info("🖼️ (pratinjau tidak tersedia)")
+                else:
+                    st.info("📄 (format tidak didukung)")
 
         with kol2:
             st.markdown(f"**{data.nama}**")
