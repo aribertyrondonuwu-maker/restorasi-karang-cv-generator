@@ -338,8 +338,11 @@ def tampilkan_kepala():
 def pratinjau_berkas(berkas, label: str, wajib: bool = True):
     """Menampilkan pratinjau berkas unggahan beserta status validasinya.
 
-    Gambar ditampilkan sebagai gambar kecil, sedangkan berkas PDF
-    ditampilkan sebagai kartu keterangan dengan nama berkas.
+    Gambar JPG/PNG ditampilkan sebagai thumbnail kecil. Berkas PDF —
+    baik yang dikenali dari ekstensi maupun dari magic bytes '%PDF' —
+    ditampilkan sebagai kartu keterangan. Semua format lain yang tidak
+    dapat dibaca PIL juga ditangkap lewat try/except agar aplikasi
+    tidak crash.
     """
     if berkas is None:
         kelas = "kartu-berkas kartu-berkas-kosong" if wajib else "kartu-berkas"
@@ -350,15 +353,27 @@ def pratinjau_berkas(berkas, label: str, wajib: bool = True):
         )
         return
 
-    if adalah_pdf(berkas.name):
-        ukuran_kb = len(berkas.getvalue()) / 1024
+    data = berkas.getvalue()
+    # Deteksi PDF: cek ekstensi ATAU magic bytes (%PDF) agar file PDF
+    # yang diunggah dengan ekstensi .jpg/.png pun ditangani dengan benar.
+    if adalah_pdf(berkas.name) or data[:4] == b"%PDF":
+        ukuran_kb = len(data) / 1024
         st.markdown(
             f"<div class='kartu-berkas'>📄 <b>{berkas.name}</b><br>"
             f"Dokumen PDF · {ukuran_kb:,.0f} KB</div>",
             unsafe_allow_html=True,
         )
     else:
-        st.image(berkas.getvalue(), width=140, caption=berkas.name)
+        try:
+            st.image(data, width=140, caption=berkas.name)
+        except Exception:
+            # Format gambar tidak dikenali PIL (HEIC, file rusak, dsb.)
+            ukuran_kb = len(data) / 1024
+            st.markdown(
+                f"<div class='kartu-berkas'>🖼️ <b>{berkas.name}</b><br>"
+                f"Berkas · {ukuran_kb:,.0f} KB</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def bagian_unggah_dokumen(kunci_awalan: str = "cv", wajib_lisensi: bool = True):
